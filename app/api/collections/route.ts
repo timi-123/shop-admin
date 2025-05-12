@@ -43,15 +43,34 @@ export const POST = async (req: NextRequest) => {
 
 export const GET = async (req: NextRequest) => {
   try {
-    await connectToDB()
+    await connectToDB();
 
-    const collections = await Collection.find().sort({ createdAt: "desc" })
+    const collections = await Collection.find().sort({ createdAt: "desc" });
 
-    return NextResponse.json(collections, { status: 200 })
+    return NextResponse.json(collections, { 
+      status: 200, 
+      headers: {
+        "Access-Control-Allow-Origin": `${process.env.ECOMMERCE_STORE_URL || 'http://localhost:3001'}`,
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      }
+    });
   } catch (err) {
-    console.log("[collections_GET]", err)
-    return new NextResponse("Internal Server Error", { status: 500 })
+    console.log("[collections_GET]", err);
+    return new NextResponse("Internal Server Error", { status: 500 });
   }
-}
+};
+
+// Add this new function for handling OPTIONS requests
+export const OPTIONS = async () => {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": `${process.env.ECOMMERCE_STORE_URL || 'http://localhost:3001'}`,
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+};
 
 export const dynamic = "force-dynamic";

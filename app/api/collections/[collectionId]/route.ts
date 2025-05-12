@@ -21,11 +21,30 @@ export const GET = async (
       );
     }
 
-    return NextResponse.json(collection, { status: 200 });
+    return NextResponse.json(collection, { 
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": `${process.env.ECOMMERCE_STORE_URL || 'http://localhost:3001'}`,
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      }
+    });
   } catch (err) {
     console.log("[collectionId_GET]", err);
     return new NextResponse("Internal error", { status: 500 });
   }
+};
+
+// Add this new function for handling OPTIONS requests
+export const OPTIONS = async () => {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": `${process.env.ECOMMERCE_STORE_URL || 'http://localhost:3001'}`,
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
 };
 
 export const POST = async (

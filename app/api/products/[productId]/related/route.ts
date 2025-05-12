@@ -24,11 +24,29 @@ export const GET = async (req: NextRequest, { params }: { params: { productId: s
       return new NextResponse(JSON.stringify({ message: "No related products found" }), { status: 404 })
     }
 
-    return NextResponse.json(relatedProducts, { status: 200 })
+    return NextResponse.json(relatedProducts, { 
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": `${process.env.ECOMMERCE_STORE_URL || 'http://localhost:3001'}`,
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      }
+    })
   } catch (err) {
     console.log("[related_GET", err)
     return new NextResponse("Internal Server Error", { status: 500 })
   }
 }
 
+// Add this new function for handling OPTIONS requests
+export const OPTIONS = async () => {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": `${process.env.ECOMMERCE_STORE_URL || 'http://localhost:3001'}`,
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+};
 export const dynamic = "force-dynamic";
