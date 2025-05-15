@@ -1,4 +1,4 @@
-// components/layout/LeftSideBar.tsx (Updated)
+// components/layout/LeftSideBar.tsx
 "use client"
 
 import { UserButton } from "@clerk/nextjs";
@@ -11,10 +11,10 @@ import { getNavLinks } from "@/lib/constants";
 const LeftSideBar = () => {
   const pathname = usePathname();
   const params = useParams();
-  const { role } = useRole();
+  const { role, isAdmin, isVendor } = useRole();
   
   // Get vendorId from URL if admin is viewing a specific vendor
-  const vendorId = role === "admin" && params.vendorId ? params.vendorId as string : undefined;
+  const vendorId = params.vendorId as string;
   const navLinks = getNavLinks(role, vendorId);
 
   return (
@@ -27,7 +27,10 @@ const LeftSideBar = () => {
             href={link.url}
             key={link.label}
             className={`flex gap-4 text-body-medium ${
-              pathname === link.url ? "text-blue-1" : "text-grey-1"
+              pathname === link.url || 
+              (pathname?.includes(link.url) && link.url !== '/') 
+                ? "text-blue-1" 
+                : "text-grey-1"
             }`}
           >
             {link.icon} <p>{link.label}</p>

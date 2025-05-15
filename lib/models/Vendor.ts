@@ -17,6 +17,7 @@ const vendorSchema = new mongoose.Schema({
   },
   phoneNumber: String,
   businessDescription: String,
+  logo: String, // Add logo field
   businessAddress: {
     street: String,
     city: String,

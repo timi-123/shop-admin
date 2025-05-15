@@ -15,42 +15,58 @@ import Link from "next/link";
 const VendorCollectionsPage = () => {
   const router = useRouter();
   const params = useParams();
-  const { role, isAdmin } = useRole();
+  const { role, isAdmin, isVendor } = useRole();
   const [loading, setLoading] = useState(true);
   const [collections, setCollections] = useState<CollectionType[]>([]);
   const [vendor, setVendor] = useState<VendorType | null>(null);
 
   useEffect(() => {
-    if (!isAdmin) return;
-    
     const fetchData = async () => {
       try {
+        setLoading(true);
+        
         // Get vendor info
         const vendorRes = await fetch(`/api/vendors/${params.vendorId}`);
+        if (!vendorRes.ok) {
+          throw new Error("Failed to fetch vendor");
+        }
+        
         const vendorData = await vendorRes.json();
         setVendor(vendorData);
         
+        // Check permissions
+        if (!isAdmin && (!isVendor || vendorData.clerkId !== localStorage.getItem('userId'))) {
+          router.push("/");
+          return;
+        }
+        
         // Get vendor collections
         const collectionsRes = await fetch(`/api/vendors/${params.vendorId}/collections`);
+        if (!collectionsRes.ok) {
+          throw new Error("Failed to fetch collections");
+        }
+        
         const collectionsData = await collectionsRes.json();
         setCollections(collectionsData);
-        setLoading(false);
       } catch (error) {
         console.error("Error fetching data:", error);
+      } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
-  }, [isAdmin, params.vendorId]);
+    if (params.vendorId && (isAdmin || isVendor)) {
+      fetchData();
+    }
+  }, [isAdmin, isVendor, params.vendorId, router]);
 
   if (loading) return <Loader />;
   
-  if (!isAdmin) {
+  if (!vendor) {
     return (
       <div className="px-10 py-5">
-        <p className="text-heading2-bold">Access Denied</p>
-        <p className="text-grey-1 mt-5">Only administrators can access this page.</p>
+        <p className="text-heading2-bold">Vendor not found</p>
+        <p className="text-grey-1 mt-5">The vendor you're looking for doesn't exist or has been removed.</p>
       </div>
     );
   }
@@ -59,7 +75,7 @@ const VendorCollectionsPage = () => {
     <div className="px-10 py-5">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <p className="text-heading2-bold">{vendor?.businessName} - Collections</p>
+          <p className="text-heading2-bold">{vendor.businessName} - Collections</p>
           <Link href={`/vendors/${params.vendorId}`} className="text-blue-1 hover:underline">
             Back to vendor details
           </Link>
@@ -72,9 +88,17 @@ const VendorCollectionsPage = () => {
         </Link>
       </div>
       <Separator className="bg-grey-1 my-4" />
-      <DataTable columns={columns} data={collections} searchKey="title" />
+      
+      {collections.length === 0 ? (
+        <p className="text-grey-1">No collections found for this vendor.</p>
+      ) : (
+        <DataTable columns={columns} data={collections} searchKey="title" />
+      )}
     </div>
   );
 };
 
 export default VendorCollectionsPage;
+
+// Add support for dynamic route
+export const dynamic = "force-dynamic";

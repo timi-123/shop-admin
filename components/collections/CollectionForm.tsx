@@ -1,4 +1,4 @@
-// components/collections/CollectionForm.tsx (Updated)
+// components/collections/CollectionForm.tsx
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -22,12 +22,11 @@ import ImageUpload from "../custom ui/ImageUpload";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import Delete from "../custom ui/Delete";
-import { useRole } from "@/lib/hooks/useRole";
 
 const formSchema = z.object({
-  title: z.string().min(2).max(20),
+  title: z.string().min(2).max(100),
   description: z.string().min(2).max(500).trim(),
-  image: z.string(),
+  image: z.string().min(1, "Image is required"),
 });
 
 interface CollectionFormProps {
@@ -38,17 +37,20 @@ interface CollectionFormProps {
 const CollectionForm: React.FC<CollectionFormProps> = ({ initialData, vendorId }) => {
   const router = useRouter();
   const params = useParams();
-  const { role, isAdmin, isVendor } = useRole();
-
-  const [loading, setLoading] = useState(false);
-
-  // Determine the vendor ID from props or params
-  const effectiveVendorId = vendorId || params.vendorId as string;
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  
+  // Use vendorId from props, or try to get it from params
+  const effectiveVendorId = vendorId || (params?.vendorId as string);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: initialData
-      ? initialData
+      ? {
+          title: initialData.title,
+          description: initialData.description,
+          image: initialData.image,
+        }
       : {
           title: "",
           description: "",
@@ -56,50 +58,80 @@ const CollectionForm: React.FC<CollectionFormProps> = ({ initialData, vendorId }
         },
   });
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement> | React.KeyboardEvent<HTMLTextAreaElement>) => {
+  // This function prevents the default form submission behavior
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
     }
-  }
+  };
   
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      setLoading(true);
+      // Prevent multiple submissions
+      if (submitting) return;
+      
+      setSubmitting(true);
+      
+      console.log(`Creating collection for vendor ${effectiveVendorId}`);
+      console.log("Form data:", values);
+      
+      if (!effectiveVendorId) {
+        toast.error("Vendor ID is missing");
+        setSubmitting(false);
+        return;
+      }
+      
       let url;
+      let method = "POST";
       
       if (initialData) {
         // Update existing collection
-        url = effectiveVendorId
-          ? `/api/vendors/${effectiveVendorId}/collections/${initialData._id}`
-          : `/api/collections/${initialData._id}`;
+        url = `/api/vendors/${effectiveVendorId}/collections/${initialData._id}`;
       } else {
         // Create new collection
-        url = effectiveVendorId
-          ? `/api/vendors/${effectiveVendorId}/collections`
-          : "/api/collections";
+        url = `/api/vendors/${effectiveVendorId}/collections`;
       }
       
       const res = await fetch(url, {
-        method: "POST",
+        method,
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(values),
       });
       
-      if (res.ok) {
-        setLoading(false);
-        toast.success(`Collection ${initialData ? "updated" : "created"}`);
-        
-        if (effectiveVendorId) {
-          router.push(`/vendors/${effectiveVendorId}`);
-        } else {
-          router.push("/collections");
-        }
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to submit collection");
       }
-    } catch (err) {
-      console.log("[collections_POST]", err);
-      toast.error("Something went wrong! Please try again.");
+      
+      // Set success state
+      setSubmitSuccess(true);
+      toast.success(`Collection ${initialData ? "updated" : "created"} successfully!`);
+      
+      // Wait a moment before redirecting to ensure toast is shown
+      setTimeout(() => {
+        router.push(`/vendors/${effectiveVendorId}/collections`);
+      }, 800);
+      
+    } catch (err: any) {
+      console.error("Error submitting collection:", err);
+      toast.error(err.message || "Something went wrong! Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handle cancel button click separately from form submission
+  const handleCancel = (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent any default behavior
+    
+    // Navigate back to collections
+    if (effectiveVendorId) {
+      router.push(`/vendors/${effectiveVendorId}/collections`);
+    } else {
+      router.push("/collections");
     }
   };
 
@@ -114,8 +146,13 @@ const CollectionForm: React.FC<CollectionFormProps> = ({ initialData, vendorId }
         <p className="text-heading2-bold">Create Collection</p>
       )}
       <Separator className="bg-grey-1 mt-4 mb-7" />
+      
+      {/* Use React Hook Form but manually handle submission */}
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          form.handleSubmit(onSubmit)(e);
+        }} className="space-y-8">
           <FormField
             control={form.control}
             name="title"
@@ -160,21 +197,20 @@ const CollectionForm: React.FC<CollectionFormProps> = ({ initialData, vendorId }
             )}
           />
           <div className="flex gap-10">
-            <Button type="submit" className="bg-blue-1 text-white">
-              Submit
+            <Button 
+              type="submit" 
+              className="bg-blue-1 text-white"
+              disabled={submitting || submitSuccess}
+            >
+              {submitting ? "Submitting..." : "Submit"}
             </Button>
             <Button
-              type="button"
-              onClick={() => {
-                if (effectiveVendorId) {
-                  router.push(`/vendors/${effectiveVendorId}`);
-                } else {
-                  router.push("/collections");
-                }
-              }}
+              type="button" // Important: This must be type="button"
+              onClick={handleCancel}
               className="bg-blue-1 text-white"
+              disabled={submitting || submitSuccess}
             >
-              Discard
+              Cancel
             </Button>
           </div>
         </form>

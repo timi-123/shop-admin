@@ -1,4 +1,4 @@
-// lib/types.d.ts (Updated for both projects)
+// lib/types.d.ts
 type VendorType = {
   _id: string;
   clerkId: string;
@@ -6,6 +6,7 @@ type VendorType = {
   email: string;
   phoneNumber?: string;
   businessDescription?: string;
+  logo?: string; // Add logo field
   businessAddress?: {
     street: string;
     city: string;
@@ -64,12 +65,12 @@ type ProductType = {
   colors: string[];
   price: number;
   expense: number;
-  cost?: number; // Add optional cost field
+  cost?: number;
   vendor: string | VendorType;
   isApproved: boolean;
   stockQuantity: number;
-  createdAt: string | Date;  // Changed from Date to string | Date
-  updatedAt: string | Date;  // Changed from Date to string | Date
+  createdAt: string | Date;
+  updatedAt: string | Date;
 }
 
 type OrderColumnType = {

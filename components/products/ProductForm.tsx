@@ -1,4 +1,4 @@
-// components/products/ProductForm.tsx (Updated)
+// components/products/ProductForm.tsx
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -28,10 +28,10 @@ import Loader from "../custom ui/Loader";
 import { useRole } from "@/lib/hooks/useRole";
 
 const formSchema = z.object({
-  title: z.string().min(2).max(20),
+  title: z.string().min(2).max(100),
   description: z.string().min(2).max(500).trim(),
-  media: z.array(z.string()),
-  category: z.string(),
+  media: z.array(z.string()).min(1, "At least one image is required"),
+  category: z.string().min(2),
   collections: z.array(z.string()),
   tags: z.array(z.string()),
   sizes: z.array(z.string()),
@@ -48,41 +48,54 @@ interface ProductFormProps {
 const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
   const router = useRouter();
   const params = useParams();
-  const { role, isAdmin, isVendor } = useRole();
+  const { isAdmin, isVendor } = useRole();
 
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
   const [collections, setCollections] = useState<CollectionType[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   // Determine the vendor ID from props or params
-  const effectiveVendorId = vendorId || params.vendorId as string;
+  const effectiveVendorId = vendorId || (params?.vendorId as string);
 
   const getCollections = async () => {
     try {
-      let res;
+      setLoading(true);
+      console.log("Fetching collections for vendor:", effectiveVendorId);
       
+      let url;
       if (effectiveVendorId) {
         // Get vendor-specific collections
-        res = await fetch(`/api/vendors/${effectiveVendorId}/collections`, {
-          method: "GET",
-        });
+        url = `/api/vendors/${effectiveVendorId}/collections`;
       } else {
         // Get all collections for admin
-        res = await fetch("/api/collections", {
-          method: "GET",
-        });
+        url = "/api/collections";
+      }
+      
+      const res = await fetch(url, {
+        method: "GET"
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to fetch collections");
       }
       
       const data = await res.json();
       setCollections(data);
+    } catch (err: any) {
+      console.error("Error fetching collections:", err);
+      toast.error(err.message || "Failed to fetch collections");
+      setError(err.message || "Failed to fetch collections");
+    } finally {
       setLoading(false);
-    } catch (err) {
-      console.log("[collections_GET]", err);
-      toast.error("Something went wrong! Please try again.");
     }
   };
 
   useEffect(() => {
     getCollections();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveVendorId]);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -109,9 +122,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
   });
 
   const handleKeyPress = (
-    e:
-      | React.KeyboardEvent<HTMLInputElement>
-      | React.KeyboardEvent<HTMLTextAreaElement>
+    e: React.KeyboardEvent<HTMLInputElement> | React.KeyboardEvent<HTMLTextAreaElement>
   ) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -120,48 +131,83 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      setLoading(true);
+      // Prevent multiple submissions
+      if (submitting) return;
+      
+      setSubmitting(true);
+      setError(null);
+      
+      console.log(`Submitting product for vendor ${effectiveVendorId}`);
+      console.log("Form data:", values);
+      
+      if (!effectiveVendorId) {
+        toast.error("Vendor ID is missing");
+        setError("Vendor ID is missing");
+        setSubmitting(false);
+        return;
+      }
+      
       let url;
+      let method = "POST";
       
       if (initialData) {
         // Update existing product
-        url = effectiveVendorId
-          ? `/api/vendors/${effectiveVendorId}/products/${initialData._id}`
-          : `/api/products/${initialData._id}`;
+        url = `/api/vendors/${effectiveVendorId}/products/${initialData._id}`;
       } else {
         // Create new product
-        url = effectiveVendorId
-          ? `/api/vendors/${effectiveVendorId}/products`
-          : "/api/products";
+        url = `/api/vendors/${effectiveVendorId}/products`;
       }
       
       const res = await fetch(url, {
-        method: "POST",
+        method,
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(values),
       });
       
-      if (res.ok) {
-        setLoading(false);
-        toast.success(`Product ${initialData ? "updated" : "created"}`);
-        
-        if (effectiveVendorId) {
-          router.push(`/vendors/${effectiveVendorId}`);
-        } else {
-          router.push("/products");
-        }
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to submit product");
       }
-    } catch (err) {
-      console.log("[products_POST]", err);
-      toast.error("Something went wrong! Please try again.");
+      
+      // Set success state
+      setSubmitSuccess(true);
+      toast.success(`Product ${initialData ? "updated" : "created"} successfully!`);
+      
+      // Wait a moment before redirecting to ensure toast is shown
+      setTimeout(() => {
+        if (isAdmin) {
+          router.push(`/vendors/${effectiveVendorId}/products`);
+        } else {
+          router.push("/my-products");
+        }
+      }, 800);
+      
+    } catch (err: any) {
+      console.error("Error submitting product:", err);
+      setError(err.message || "Something went wrong! Please try again.");
+      toast.error(err.message || "Something went wrong! Please try again.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  return loading ? (
-    <Loader />
-  ) : (
+  // Handle cancel button click separately from form submission
+  const handleCancel = (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent any default behavior
+    
+    // Navigate back
+    if (isAdmin) {
+      router.push(`/vendors/${effectiveVendorId}/products`);
+    } else {
+      router.push("/my-products");
+    }
+  };
+
+  if (loading) return <Loader />;
+
+  return (
     <div className="p-10">
       {initialData ? (
         <div className="flex items-center justify-between">
@@ -172,8 +218,18 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
         <p className="text-heading2-bold">Create Product</p>
       )}
       <Separator className="bg-grey-1 mt-4 mb-7" />
+      
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-800 p-4 mb-6 rounded-md">
+          {error}
+        </div>
+      )}
+      
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          form.handleSubmit(onSubmit)(e);
+        }} className="space-y-8">
           <FormField
             control={form.control}
             name="title"
@@ -214,7 +270,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
             name="media"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Image</FormLabel>
+                <FormLabel>Images</FormLabel>
                 <FormControl>
                   <ImageUpload
                     value={field.value}
@@ -391,21 +447,20 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
           </div>
 
           <div className="flex gap-10">
-            <Button type="submit" className="bg-blue-1 text-white">
-              Submit
+            <Button 
+              type="submit" 
+              className="bg-blue-1 text-white"
+              disabled={submitting || submitSuccess}
+            >
+              {submitting ? "Submitting..." : "Submit"}
             </Button>
             <Button
-              type="button"
-              onClick={() => {
-                if (effectiveVendorId) {
-                  router.push(`/vendors/${effectiveVendorId}`);
-                } else {
-                  router.push("/products");
-                }
-              }}
+              type="button" // Important: This must be type="button"
+              onClick={handleCancel}
               className="bg-blue-1 text-white"
+              disabled={submitting || submitSuccess}
             >
-              Discard
+              Cancel
             </Button>
           </div>
         </form>

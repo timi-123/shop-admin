@@ -20,16 +20,18 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import ImageUpload from "@/components/custom ui/ImageUpload";
 
 const formSchema = z.object({
   businessName: z.string().min(2).max(100),
   phoneNumber: z.string().min(10).max(20),
-  businessDescription: z.string().min(10).max(1000), // Reduced from 50 to 10
+  businessDescription: z.string().min(10).max(1000),
+  logo: z.string().optional(), // Add logo field
   businessAddress: z.object({
-    street: z.string().min(3), // Reduced from 5 to 3
+    street: z.string().min(3),
     city: z.string().min(2),
     state: z.string().min(2),
-    postalCode: z.string().min(3), // Reduced from 4 to 3
+    postalCode: z.string().min(3),
     country: z.string().min(2),
   }),
   taxInfo: z.object({
@@ -38,12 +40,12 @@ const formSchema = z.object({
   }),
   bankDetails: z.object({
     accountName: z.string().min(2),
-    accountNumber: z.string().min(4), // Reduced from 5 to 4
+    accountNumber: z.string().min(4),
     bankName: z.string().min(2),
-    routingNumber: z.string().optional(), // Made optional
+    routingNumber: z.string().optional(),
   }),
   socialMedia: z.object({
-    website: z.string().url().optional().or(z.literal("")),
+    website: z.string().optional(),
     facebook: z.string().optional(),
     instagram: z.string().optional(),
     twitter: z.string().optional(),
@@ -60,6 +62,7 @@ const VendorApplicationForm = () => {
       businessName: "",
       phoneNumber: "",
       businessDescription: "",
+      logo: "",
       businessAddress: {
         street: "",
         city: "",
@@ -90,12 +93,24 @@ const VendorApplicationForm = () => {
     console.log("Form submitted with values:", values);
     try {
       setLoading(true);
+      
+      // Clean up social media URLs if provided
+      const cleanedValues = {
+        ...values,
+        socialMedia: {
+          website: values.socialMedia.website || "",
+          facebook: values.socialMedia.facebook || "",
+          instagram: values.socialMedia.instagram || "",
+          twitter: values.socialMedia.twitter || "",
+        }
+      };
+      
       const res = await fetch("/api/vendors/apply", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(values),
+        body: JSON.stringify(cleanedValues),
       });
 
       console.log("Response status:", res.status);
@@ -108,7 +123,7 @@ const VendorApplicationForm = () => {
       } else {
         const error = await res.json();
         console.error("Error response:", error);
-        toast.error(error.message || "Failed to submit application");
+        toast.error(error.error || "Failed to submit application");
       }
     } catch (error) {
       console.error("Error submitting application:", error);
@@ -181,6 +196,24 @@ const VendorApplicationForm = () => {
                 </FormItem>
               )}
             />
+            
+            <FormField
+              control={form.control}
+              name="logo"
+              render={({ field }) => (
+                <FormItem className="mt-4">
+                  <FormLabel>Business Logo</FormLabel>
+                  <FormControl>
+                    <ImageUpload
+                      value={field.value ? [field.value] : []}
+                      onChange={(url) => field.onChange(url)}
+                      onRemove={() => field.onChange("")}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
 
           {/* Business Address */}
@@ -196,7 +229,7 @@ const VendorApplicationForm = () => {
                     <FormControl>
                       <Input placeholder="123 Main St" {...field} />
                     </FormControl>
-                    <FormMessage className="text-red-500" />
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -344,7 +377,7 @@ const VendorApplicationForm = () => {
                 name="bankDetails.routingNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Routing Number</FormLabel>
+                    <FormLabel>Routing Number (Optional)</FormLabel>
                     <FormControl>
                       <Input placeholder="Routing number" {...field} />
                     </FormControl>

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 import { connectToDB } from "@/lib/mongoDB";
 import Vendor from "@/lib/models/Vendor";
+import Role from "@/lib/models/Role";
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,6 +15,14 @@ export async function GET(req: NextRequest) {
 
     await connectToDB();
 
+    // Get user's role
+    const userRole = await Role.findOne({ clerkId: userId });
+    
+    if (!userRole || userRole.role !== "vendor") {
+      return NextResponse.json({ error: "Not a vendor" }, { status: 403 });
+    }
+
+    // Find vendor with matching clerkId
     const vendor = await Vendor.findOne({ clerkId: userId });
     
     if (!vendor) {
@@ -29,3 +38,6 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+// Add support for dynamic route
+export const dynamic = "force-dynamic";

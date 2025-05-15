@@ -1,11 +1,11 @@
-// app/api/vendors/[vendorId]/products/route.ts
+// app/api/vendors/[vendorId]/collections/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 import { connectToDB } from "@/lib/mongoDB";
-import Product from "@/lib/models/Product";
 import Collection from "@/lib/models/Collection";
 import Vendor from "@/lib/models/Vendor";
 import Role from "@/lib/models/Role";
+import Product from "@/lib/models/Product";
 
 export async function GET(
   req: NextRequest,
@@ -36,22 +36,19 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Get vendor products
-    const products = await Product.find({ 
+    // Get all collections for this vendor
+    const collections = await Collection.find({ 
       vendor: params.vendorId 
-    })
-      .populate({ 
-        path: "collections", 
-        model: Collection,
-        select: "title _id" 
-      })
-      .sort({ createdAt: "desc" });
+    }).populate({
+      path: "products",
+      model: Product
+    }).sort({ createdAt: "desc" });
 
-    return NextResponse.json(products, { status: 200 });
+    return NextResponse.json(collections, { status: 200 });
   } catch (error) {
-    console.error("Error fetching vendor products:", error);
+    console.error("Error fetching vendor collections:", error);
     return NextResponse.json(
-      { error: "Failed to fetch vendor products" },
+      { error: "Failed to fetch vendor collections" },
       { status: 500 }
     );
   }
@@ -61,7 +58,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { vendorId: string } }
 ) {
-  console.log("--- PRODUCT POST REQUEST START ---");
+  console.log("--- COLLECTION POST REQUEST START ---");
   console.log("Vendor ID:", params.vendorId);
   
   try {
@@ -87,86 +84,69 @@ export async function POST(
     console.log("Vendor found:", vendor.businessName);
 
     // Check permissions
-    console.log("Checking user permissions...");
+    console.log("Checking permissions...");
     const userRole = await Role.findOne({ clerkId: userId });
     console.log("User role:", userRole?.role);
     
     const isAdmin = userRole?.role === "admin";
     const isVendorOwner = vendor.clerkId === userId;
-    
     console.log("Is admin:", isAdmin);
     console.log("Vendor clerkId:", vendor.clerkId);
     console.log("User clerkId:", userId);
     console.log("Is vendor owner:", isVendorOwner);
 
-    // Always allow admin users or the vendor owner
     if (!isAdmin && !isVendorOwner) {
-      console.log("Permission denied: User is not admin and not the vendor owner");
-      return NextResponse.json({ 
-        error: "You don't have permission to create products for this vendor" 
-      }, { status: 403 });
+      console.log("Forbidden: User does not have permission");
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    
-    console.log("Permission check passed!");
 
     console.log("Parsing request body...");
-    const productData = await req.json();
-    console.log("Product data received:", JSON.stringify(productData, null, 2));
+    const collectionData = await req.json();
+    console.log("Collection data received:", JSON.stringify(collectionData, null, 2));
 
-    // Validate required fields
-    if (!productData.title || !productData.media || productData.media.length === 0 || !productData.category) {
-      console.log("Validation error: Missing required fields");
+    if (!collectionData.title || !collectionData.image) {
+      console.log("Validation error: Missing title or image");
       return NextResponse.json(
-        { error: "Title, media, and category are required" },
+        { error: "Title and image are required" },
         { status: 400 }
       );
     }
 
-    console.log("Creating product for vendor:", params.vendorId);
+    console.log("Creating collection for vendor:", params.vendorId);
     
-    // Create new product
-    const newProduct = await Product.create({
-      ...productData,
+    // Create new collection
+    const newCollection = await Collection.create({
+      title: collectionData.title,
+      description: collectionData.description || "",
+      image: collectionData.image,
       vendor: params.vendorId,
+      products: [],
+      isActive: true
     });
 
-    await newProduct.save();
-    console.log("Product created with ID:", newProduct._id);
+    await newCollection.save();
+    console.log("Collection created successfully with ID:", newCollection._id);
 
-    // Update collections if provided
-    if (productData.collections && Array.isArray(productData.collections)) {
-      console.log("Updating collections with the new product");
-      for (const collectionId of productData.collections) {
-        const collection = await Collection.findById(collectionId);
-        if (collection && collection.vendor.toString() === params.vendorId) {
-          collection.products.push(newProduct._id);
-          await collection.save();
-          console.log(`Added product to collection: ${collectionId}`);
-        } else {
-          console.log(`Collection not found or doesn't belong to this vendor: ${collectionId}`);
-        }
-      }
-    }
-
-    // Add populated collections for the response
-    const populatedProduct = await Product.findById(newProduct._id).populate({
-      path: "collections",
-      model: Collection,
-      select: "title _id"
-    });
-
-    console.log("Product created successfully:", newProduct._id);
-    console.log("--- PRODUCT POST REQUEST END ---");
+    const result = { 
+      _id: newCollection._id,
+      title: newCollection.title,
+      image: newCollection.image,
+      vendor: newCollection.vendor,
+      message: "Collection created successfully" 
+    };
     
-    return NextResponse.json(populatedProduct, { status: 201 });
+    console.log("Returning response:", JSON.stringify(result, null, 2));
+    console.log("--- COLLECTION POST REQUEST END ---");
+    
+    return NextResponse.json(result, { status: 201 });
   } catch (error: any) {
-    console.error("Error creating vendor product:", error);
+    console.error("Error creating vendor collection:", error);
     console.log("Error message:", error.message);
     console.log("Error stack:", error.stack);
-    console.log("--- PRODUCT POST REQUEST END WITH ERROR ---");
+    console.log("--- COLLECTION POST REQUEST END WITH ERROR ---");
     
     return NextResponse.json(
-      { error: `Failed to create vendor product: ${error.message}` },
+      { error: `Failed to create vendor collection: ${error.message}` },
       { status: 500 }
     );
   }

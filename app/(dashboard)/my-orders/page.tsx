@@ -1,25 +1,22 @@
-// app/(dashboard)/my-products/page.tsx
+// app/(dashboard)/my-orders/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { useRole } from "@/lib/hooks/useRole";
-import { Plus } from "lucide-react";
 import { DataTable } from "@/components/custom ui/DataTable";
-import { columns } from "@/components/products/ProductColumns";
-import { Button } from "@/components/ui/button";
+import { columns } from "@/components/orders/OrderColumns";
 import { Separator } from "@/components/ui/separator";
 import Loader from "@/components/custom ui/Loader";
-import Link from "next/link";
 
-const MyProductsPage = () => {
+const MyOrdersPage = () => {
   const router = useRouter();
   const { user } = useUser();
   const { role, isVendor } = useRole();
   const [loading, setLoading] = useState(true);
   const [vendor, setVendor] = useState<VendorType | null>(null);
-  const [products, setProducts] = useState<ProductType[]>([]);
+  const [orders, setOrders] = useState([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -40,16 +37,16 @@ const MyProductsPage = () => {
         const vendorData = await vendorRes.json();
         setVendor(vendorData);
         
-        // Then get products for this vendor
-        const productsRes = await fetch(`/api/vendors/${vendorData._id}/products`);
-        if (!productsRes.ok) {
-          throw new Error("Failed to fetch products");
+        // Then get orders for this vendor
+        const ordersRes = await fetch(`/api/vendors/${vendorData._id}/orders`);
+        if (!ordersRes.ok) {
+          throw new Error("Failed to fetch orders");
         }
         
-        const productsData = await productsRes.json();
-        setProducts(productsData);
+        const ordersData = await ordersRes.json();
+        setOrders(ordersData);
       } catch (error) {
-        console.error("Error fetching products:", error);
+        console.error("Error fetching orders:", error);
       } finally {
         setLoading(false);
       }
@@ -73,26 +70,16 @@ const MyProductsPage = () => {
 
   return (
     <div className="px-10 py-5">
-      <div className="flex items-center justify-between">
-        <p className="text-heading2-bold">My Products</p>
-        {vendor && (
-          <Link href={`/vendors/${vendor._id}/products/new`}>
-            <Button className="bg-blue-1 text-white">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Product
-            </Button>
-          </Link>
-        )}
-      </div>
-      <Separator className="bg-grey-1 my-4" />
+      <p className="text-heading2-bold">My Orders</p>
+      <Separator className="bg-grey-1 my-5"/>
       
-      {products.length === 0 ? (
-        <p className="text-grey-1">You don't have any products yet.</p>
+      {orders.length === 0 ? (
+        <p className="text-grey-1">You don't have any orders yet.</p>
       ) : (
-        <DataTable columns={columns} data={products} searchKey="title" />
+        <DataTable columns={columns} data={orders} searchKey="_id" />
       )}
     </div>
   );
 };
 
-export default MyProductsPage;
+export default MyOrdersPage;
