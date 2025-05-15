@@ -1,9 +1,10 @@
+// components/collections/CollectionForm.tsx (Updated)
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 
 import { Separator } from "../ui/separator";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import ImageUpload from "../custom ui/ImageUpload";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import Delete from "../custom ui/Delete";
+import { useRole } from "@/lib/hooks/useRole";
 
 const formSchema = z.object({
   title: z.string().min(2).max(20),
@@ -29,13 +31,19 @@ const formSchema = z.object({
 });
 
 interface CollectionFormProps {
-  initialData?: CollectionType | null; //Must have "?" to make it optional
+  initialData?: CollectionType | null;
+  vendorId?: string;
 }
 
-const CollectionForm: React.FC<CollectionFormProps> = ({ initialData }) => {
+const CollectionForm: React.FC<CollectionFormProps> = ({ initialData, vendorId }) => {
   const router = useRouter();
+  const params = useParams();
+  const { role, isAdmin, isVendor } = useRole();
 
   const [loading, setLoading] = useState(false);
+
+  // Determine the vendor ID from props or params
+  const effectiveVendorId = vendorId || params.vendorId as string;
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -57,18 +65,37 @@ const CollectionForm: React.FC<CollectionFormProps> = ({ initialData }) => {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setLoading(true);
-      const url = initialData
-        ? `/api/collections/${initialData._id}`
-        : "/api/collections";
+      let url;
+      
+      if (initialData) {
+        // Update existing collection
+        url = effectiveVendorId
+          ? `/api/vendors/${effectiveVendorId}/collections/${initialData._id}`
+          : `/api/collections/${initialData._id}`;
+      } else {
+        // Create new collection
+        url = effectiveVendorId
+          ? `/api/vendors/${effectiveVendorId}/collections`
+          : "/api/collections";
+      }
+      
       const res = await fetch(url, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(values),
       });
+      
       if (res.ok) {
         setLoading(false);
         toast.success(`Collection ${initialData ? "updated" : "created"}`);
-        window.location.href = "/collections";
-        router.push("/collections");
+        
+        if (effectiveVendorId) {
+          router.push(`/vendors/${effectiveVendorId}`);
+        } else {
+          router.push("/collections");
+        }
       }
     } catch (err) {
       console.log("[collections_POST]", err);
@@ -138,7 +165,13 @@ const CollectionForm: React.FC<CollectionFormProps> = ({ initialData }) => {
             </Button>
             <Button
               type="button"
-              onClick={() => router.push("/collections")}
+              onClick={() => {
+                if (effectiveVendorId) {
+                  router.push(`/vendors/${effectiveVendorId}`);
+                } else {
+                  router.push("/collections");
+                }
+              }}
               className="bg-blue-1 text-white"
             >
               Discard

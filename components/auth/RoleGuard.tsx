@@ -1,6 +1,7 @@
+// components/auth/RoleGuard.tsx (Complete Updated Version)
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { useUser, useClerk } from "@clerk/nextjs";
 import Loader from "@/components/custom ui/Loader";
@@ -18,6 +19,7 @@ const RoleGuard = ({
     const { isLoaded, user } = useUser();
     const { signOut } = useClerk();
     const router = useRouter();
+    const pathname = usePathname();
     const { role, loading: roleLoading } = useRole();
 
     useEffect(() => {
@@ -27,11 +29,17 @@ const RoleGuard = ({
                 return;
             }
 
-            if (role && !allowedRoles.includes(role)) {
-                // Don't redirect, just show access denied
+            // Allow regular users to access vendor application
+            if (role === "user" && !pathname.includes("/vendor-application")) {
+                router.push("/vendor-application");
+                return;
+            }
+
+            if (role && !allowedRoles.includes(role) && !pathname.includes("/vendor-application")) {
+                // Don't redirect, just show access denied for non-vendor/non-admin trying to access protected pages
             }
         }
-    }, [isLoaded, user, role, roleLoading, allowedRoles, router]);
+    }, [isLoaded, user, role, roleLoading, allowedRoles, router, pathname]);
 
     const handleSignOut = async () => {
         await signOut();
@@ -46,6 +54,11 @@ const RoleGuard = ({
         return <Loader />;
     }
 
+    // Allow vendor application page for regular users
+    if (pathname?.includes("/vendor-application")) {
+        return <>{children}</>;
+    }
+    
     // If user doesn't have the correct role, show access denied
     if (role && !allowedRoles.includes(role)) {
         return (

@@ -1,14 +1,21 @@
+// components/layout/LeftSideBar.tsx (Updated)
 "use client"
 
 import { UserButton } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-
-import { navLinks } from "@/lib/constants";
+import { usePathname, useParams } from "next/navigation";
+import { useRole } from "@/lib/hooks/useRole";
+import { getNavLinks } from "@/lib/constants";
 
 const LeftSideBar = () => {
   const pathname = usePathname();
+  const params = useParams();
+  const { role } = useRole();
+  
+  // Get vendorId from URL if admin is viewing a specific vendor
+  const vendorId = role === "admin" && params.vendorId ? params.vendorId as string : undefined;
+  const navLinks = getNavLinks(role, vendorId);
 
   return (
     <div className="h-screen left-0 top-0 sticky p-10 flex flex-col gap-16 bg-blue-2 shadow-xl max-lg:hidden">

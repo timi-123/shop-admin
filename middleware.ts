@@ -1,16 +1,19 @@
+// middleware.ts (Updated for admin dashboard)
 import { authMiddleware } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
-// Handle CORS properly while maintaining Clerk Auth
 export default authMiddleware({
   publicRoutes: [
     "/api/checkout",
     "/api/products",
     "/api/collections",
     "/api/search",
-    "/api/webhooks", // Make sure webhooks are public
+    "/api/webhooks",
+    "/api/vendors/public",
+    "/api/vendors/public/(.*)",
     "/sign-in",
-    "/sign-up"
+    "/sign-up",
+    "/vendor-application"
   ],
   afterAuth(auth, req) {
     const { pathname } = req.nextUrl;
@@ -38,8 +41,8 @@ export default authMiddleware({
       return response;
     }
 
-    // Always allow sign-in and sign-up pages
-    if (pathname.startsWith('/sign-in') || pathname.startsWith('/sign-up')) {
+    // Always allow sign-in, sign-up, and vendor application pages
+    if (pathname.startsWith('/sign-in') || pathname.startsWith('/sign-up') || pathname.startsWith('/vendor-application')) {
       return NextResponse.next();
     }
 

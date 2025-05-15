@@ -1,3 +1,4 @@
+// components/layout/TopBar.tsx (Updated)
 "use client"
 
 import { UserButton } from "@clerk/nextjs";
@@ -6,12 +7,14 @@ import Link from "next/link";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
-
-import { navLinks } from "@/lib/constants";
+import { useRole } from "@/lib/hooks/useRole";
+import { getNavLinks } from "@/lib/constants";
 
 const TopBar = () => {
   const [dropdownMenu, setDropdownMenu] = useState(false);
   const pathname = usePathname();
+  const { role } = useRole();
+  const navLinks = getNavLinks(role);
 
   return (
     <div className="sticky top-0 z-20 w-full flex justify-between items-center px-8 py-4 bg-blue-2 shadow-xl lg:hidden">

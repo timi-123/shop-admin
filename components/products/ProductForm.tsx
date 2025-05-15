@@ -1,9 +1,10 @@
+// components/products/ProductForm.tsx (Updated)
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 
 import { Separator } from "../ui/separator";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import Delete from "../custom ui/Delete";
 import MultiText from "../custom ui/MultiText";
 import MultiSelect from "../custom ui/MultiSelect";
 import Loader from "../custom ui/Loader";
+import { useRole } from "@/lib/hooks/useRole";
 
 const formSchema = z.object({
   title: z.string().min(2).max(20),
@@ -39,20 +41,37 @@ const formSchema = z.object({
 });
 
 interface ProductFormProps {
-  initialData?: ProductType | null; //Must have "?" to make it optional
+  initialData?: ProductType | null;
+  vendorId?: string;
 }
 
-const ProductForm: React.FC<ProductFormProps> = ({ initialData }) => {
+const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
   const router = useRouter();
+  const params = useParams();
+  const { role, isAdmin, isVendor } = useRole();
 
   const [loading, setLoading] = useState(true);
   const [collections, setCollections] = useState<CollectionType[]>([]);
 
+  // Determine the vendor ID from props or params
+  const effectiveVendorId = vendorId || params.vendorId as string;
+
   const getCollections = async () => {
     try {
-      const res = await fetch("/api/collections", {
-        method: "GET",
-      });
+      let res;
+      
+      if (effectiveVendorId) {
+        // Get vendor-specific collections
+        res = await fetch(`/api/vendors/${effectiveVendorId}/collections`, {
+          method: "GET",
+        });
+      } else {
+        // Get all collections for admin
+        res = await fetch("/api/collections", {
+          method: "GET",
+        });
+      }
+      
       const data = await res.json();
       setCollections(data);
       setLoading(false);
@@ -64,7 +83,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData }) => {
 
   useEffect(() => {
     getCollections();
-  }, []);
+  }, [effectiveVendorId]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -102,18 +121,37 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData }) => {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setLoading(true);
-      const url = initialData
-        ? `/api/products/${initialData._id}`
-        : "/api/products";
+      let url;
+      
+      if (initialData) {
+        // Update existing product
+        url = effectiveVendorId
+          ? `/api/vendors/${effectiveVendorId}/products/${initialData._id}`
+          : `/api/products/${initialData._id}`;
+      } else {
+        // Create new product
+        url = effectiveVendorId
+          ? `/api/vendors/${effectiveVendorId}/products`
+          : "/api/products";
+      }
+      
       const res = await fetch(url, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(values),
       });
+      
       if (res.ok) {
         setLoading(false);
         toast.success(`Product ${initialData ? "updated" : "created"}`);
-        window.location.href = "/products";
-        router.push("/products");
+        
+        if (effectiveVendorId) {
+          router.push(`/vendors/${effectiveVendorId}`);
+        } else {
+          router.push("/products");
+        }
       }
     } catch (err) {
       console.log("[products_POST]", err);
@@ -217,11 +255,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData }) => {
               name="expense"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Expense ($)</FormLabel>
+                  <FormLabel>Cost ($)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
-                      placeholder="Expense"
+                      placeholder="Cost"
                       {...field}
                       onKeyDown={handleKeyPress}
                     />
@@ -358,7 +396,13 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData }) => {
             </Button>
             <Button
               type="button"
-              onClick={() => router.push("/products")}
+              onClick={() => {
+                if (effectiveVendorId) {
+                  router.push(`/vendors/${effectiveVendorId}`);
+                } else {
+                  router.push("/products");
+                }
+              }}
               className="bg-blue-1 text-white"
             >
               Discard

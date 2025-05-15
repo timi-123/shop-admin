@@ -1,15 +1,21 @@
+// lib/models/Collection.ts (Updated)
 import mongoose from "mongoose";
 
 const collectionSchema = new mongoose.Schema({
   title: {
     type: String,
     required: true,
-    unique: true,
   },
   description: String,
   image: {
     type: String,
     required: true,
+  },
+  // Add vendor reference
+  vendor: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: "Vendor",
+    required: true 
   },
   products: [
     {
@@ -17,6 +23,10 @@ const collectionSchema = new mongoose.Schema({
       ref: "Product",
     }
   ],
+  isActive: {
+    type: Boolean,
+    default: true
+  },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -27,6 +37,6 @@ const collectionSchema = new mongoose.Schema({
   }
 })
 
-const Collection =mongoose.models.Collection || mongoose.model("Collection", collectionSchema);
+const Collection = mongoose.models.Collection || mongoose.model("Collection", collectionSchema);
 
 export default Collection;

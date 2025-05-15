@@ -81,6 +81,12 @@ const config: Config = {
         "blue-2": "#E9F5FE",
         "blue-3": "#F5F7F9",
         "red-1": "#FF0000",
+        muted: {
+        DEFAULT: "hsl(var(--muted))",
+        foreground: "hsl(var(--muted-foreground))",
+      },
+      background: "hsl(var(--background))",
+      foreground: "hsl(var(--foreground))",
       },
     },
   },
