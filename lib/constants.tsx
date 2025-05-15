@@ -1,4 +1,4 @@
-// lib/constants.tsx (Updated)
+// lib/constants.tsx
 import {
   LayoutDashboard,
   Shapes,
@@ -50,7 +50,7 @@ export const getNavLinks = (role: string | null, vendorId?: string) => {
     ];
   }
 
-  // Admin main navigation - ONLY vendors and pending approvals
+  // Admin main navigation - ONLY vendors (removed pending approvals)
   if (role === "admin") {
     return [
       ...baseLinks,
@@ -59,11 +59,7 @@ export const getNavLinks = (role: string | null, vendorId?: string) => {
         icon: <Store />,
         label: "Vendors",
       },
-      {
-        url: "/pending-approvals",
-        icon: <FileText />,
-        label: "Pending Approvals",
-      },
+      // Removed the pending approvals link from here
     ];
   }
 
