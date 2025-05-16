@@ -1,10 +1,11 @@
 // components/layout/LeftSideBar.tsx
 "use client"
 
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, useUser } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
+import { useEffect } from "react";
 import { useRole } from "@/lib/hooks/useRole";
 import { getNavLinks } from "@/lib/constants";
 
@@ -12,6 +13,14 @@ const LeftSideBar = () => {
   const pathname = usePathname();
   const params = useParams();
   const { role, isAdmin, isVendor } = useRole();
+  const { user } = useUser();
+  
+  // Store userId in localStorage when user is loaded
+  useEffect(() => {
+    if (user?.id) {
+      localStorage.setItem('userId', user.id);
+    }
+  }, [user]);
   
   // Get vendorId from URL if admin is viewing a specific vendor
   const vendorId = params.vendorId as string;

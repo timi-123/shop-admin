@@ -1,3 +1,4 @@
+// lib/hooks/useRole.tsx
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 
@@ -15,6 +16,10 @@ export const useRole = () => {
 
             try {
                 setLoading(true);
+                
+                // Store user ID in localStorage for reference
+                localStorage.setItem('userId', user.id);
+                
                 const response = await fetch("/api/role");
 
                 if (response.ok) {
@@ -47,5 +52,11 @@ export const useRole = () => {
         fetchRole();
     }, [user, isLoaded]);
 
-    return { role, loading, isAdmin: role === "admin", isVendor: role === "vendor", isUser: role === "user" };
+    return { 
+        role, 
+        loading, 
+        isAdmin: role === "admin", 
+        isVendor: role === "vendor", 
+        isUser: role === "user" 
+    };
 };

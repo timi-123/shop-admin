@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import Loader from "@/components/custom ui/Loader";
 import Link from "next/link";
+import toast from "react-hot-toast";
 
 const MyCollectionsPage = () => {
   const router = useRouter();
@@ -39,6 +40,11 @@ const MyCollectionsPage = () => {
         
         const vendorData = await vendorRes.json();
         setVendor(vendorData);
+        
+        // Store vendor ID for easy access
+        if (vendorData && vendorData._id) {
+          localStorage.setItem('vendorId', vendorData._id);
+        }
         
         // Then get collections for this vendor
         const collectionsRes = await fetch(`/api/vendors/${vendorData._id}/collections`);
@@ -71,17 +77,34 @@ const MyCollectionsPage = () => {
 
   if (loading) return <Loader />;
 
+  const handleCreateCollection = () => {
+    const vendorId = vendor?._id || localStorage.getItem('vendorId');
+    if (vendorId) {
+      router.push(`/vendors/${vendorId}/collections/new`);
+    } else {
+      toast.error("Vendor information not available. Please refresh the page.");
+    }
+  };
+
   return (
     <div className="px-10 py-5">
       <div className="flex items-center justify-between">
         <p className="text-heading2-bold">My Collections</p>
-        {vendor && (
+        {vendor ? (
           <Link href={`/vendors/${vendor._id}/collections/new`}>
             <Button className="bg-blue-1 text-white">
               <Plus className="h-4 w-4 mr-2" />
               Create Collection
             </Button>
           </Link>
+        ) : (
+          <Button 
+            className="bg-blue-1 text-white"
+            onClick={handleCreateCollection}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Collection
+          </Button>
         )}
       </div>
       <Separator className="bg-grey-1 my-4" />

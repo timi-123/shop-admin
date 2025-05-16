@@ -7,6 +7,9 @@ import Collection from "@/lib/models/Collection";
 import Vendor from "@/lib/models/Vendor";
 import Role from "@/lib/models/Role";
 
+// app/api/vendors/[vendorId]/products/route.ts
+// Only updating the GET method for better error handling
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { vendorId: string } }
@@ -15,15 +18,18 @@ export async function GET(
     const { userId } = auth();
     
     if (!userId) {
+      console.log("No userId found in auth");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    console.log(`GET products for vendor: ${params.vendorId}, requested by user: ${userId}`);
     await connectToDB();
 
     // Get vendor first to verify it exists
     const vendor = await Vendor.findById(params.vendorId);
     
     if (!vendor) {
+      console.log(`Vendor not found with ID: ${params.vendorId}`);
       return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
     }
 
@@ -32,7 +38,10 @@ export async function GET(
     const isAdmin = userRole?.role === "admin";
     const isVendorOwner = vendor.clerkId === userId;
 
+    console.log(`Permission check: isAdmin=${isAdmin}, isVendorOwner=${isVendorOwner}, vendorClerkId=${vendor.clerkId}`);
+
     if (!isAdmin && !isVendorOwner) {
+      console.log(`Permission denied for user ${userId}`);
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -47,9 +56,11 @@ export async function GET(
       })
       .sort({ createdAt: "desc" });
 
+    console.log(`Found ${products.length} products for vendor ${params.vendorId}`);
+    
     return NextResponse.json(products, { status: 200 });
   } catch (error) {
-    console.error("Error fetching vendor products:", error);
+    console.error(`Error fetching vendor products for ${params.vendorId}:`, error);
     return NextResponse.json(
       { error: "Failed to fetch vendor products" },
       { status: 500 }

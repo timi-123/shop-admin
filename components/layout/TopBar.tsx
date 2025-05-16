@@ -1,10 +1,10 @@
-// components/layout/TopBar.tsx (Updated)
+// components/layout/TopBar.tsx
 "use client"
 
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, useUser } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import { useRole } from "@/lib/hooks/useRole";
@@ -14,7 +14,15 @@ const TopBar = () => {
   const [dropdownMenu, setDropdownMenu] = useState(false);
   const pathname = usePathname();
   const { role } = useRole();
+  const { user } = useUser();
   const navLinks = getNavLinks(role);
+
+  // Store userId in localStorage when user is loaded
+  useEffect(() => {
+    if (user?.id) {
+      localStorage.setItem('userId', user.id);
+    }
+  }, [user]);
 
   return (
     <div className="sticky top-0 z-20 w-full flex justify-between items-center px-8 py-4 bg-blue-2 shadow-xl lg:hidden">
