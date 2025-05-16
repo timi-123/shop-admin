@@ -1,3 +1,4 @@
+// app/(dashboard)/layout.tsx
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "../globals.css";
@@ -7,6 +8,7 @@ import LeftSideBar from "@/components/layout/LeftSideBar";
 import TopBar from "@/components/layout/TopBar";
 import { ToasterProvider } from "@/lib/ToasterProvider";
 import RoleGuard from "@/components/auth/RoleGuard";
+import VendorDebug from "@/components/debug/VendorDebug";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -16,8 +18,8 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({
-                                       children,
-                                   }: Readonly<{
+    children,
+}: Readonly<{
     children: React.ReactNode;
 }>) {
     return (
@@ -30,6 +32,7 @@ export default function RootLayout({
                     <LeftSideBar />
                     <TopBar />
                     <div className="flex-1">{children}</div>
+                    {process.env.NODE_ENV === 'development' && <VendorDebug />}
                 </div>
             </RoleGuard>
             </body>

@@ -1,4 +1,8 @@
 // lib/constants.tsx
+<<<<<<< HEAD
+=======
+// lib/constants.tsx (Updated)
+>>>>>>> timon-branch
 import {
   LayoutDashboard,
   Shapes,
@@ -59,7 +63,11 @@ export const getNavLinks = (role: string | null, vendorId?: string) => {
         icon: <Store />,
         label: "Vendors",
       },
+<<<<<<< HEAD
       // Removed the pending approvals link from here
+=======
+    
+>>>>>>> timon-branch
     ];
   }
 

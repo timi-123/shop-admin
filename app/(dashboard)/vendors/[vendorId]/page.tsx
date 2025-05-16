@@ -17,6 +17,7 @@ import { columns as orderColumns } from "@/components/orders/OrderColumns";
 import { columns as collectionColumns } from "@/components/collections/CollectionColumns";
 import { Plus, Store, DollarSign, Package, ShoppingBag } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 const VendorDetailPage = () => {
   const params = useParams();
@@ -40,6 +41,9 @@ const VendorDetailPage = () => {
       try {
         // Fetch vendor details
         const vendorRes = await fetch(`/api/vendors/${params.vendorId}`);
+        if (!vendorRes.ok) {
+          throw new Error("Failed to fetch vendor details");
+        }
         const vendorData = await vendorRes.json();
         setVendor(vendorData);
 
@@ -51,27 +55,35 @@ const VendorDetailPage = () => {
 
         // Fetch vendor products
         const productsRes = await fetch(`/api/vendors/${params.vendorId}/products`);
-        const productsData = await productsRes.json();
-        setProducts(productsData);
+        let productsData = [];
+        if (productsRes.ok) {
+          productsData = await productsRes.json();
+          setProducts(productsData);
+        }
 
         // Fetch vendor collections  
         const collectionsRes = await fetch(`/api/vendors/${params.vendorId}/collections`);
-        const collectionsData = await collectionsRes.json();
-        setCollections(collectionsData);
+        let collectionsData = [];
+        if (collectionsRes.ok) {
+          collectionsData = await collectionsRes.json();
+          setCollections(collectionsData);
+        }
 
         // Fetch vendor orders
         const ordersRes = await fetch(`/api/vendors/${params.vendorId}/orders`);
-        const ordersData = await ordersRes.json();
-        setOrders(ordersData);
-
-        // Calculate stats
-        const totalRevenue = ordersData.reduce((sum: number, order: any) => sum + order.vendorEarnings, 0);
-        setStats({
-          totalRevenue,
-          totalOrders: ordersData.length,
-          totalProducts: productsData.length,
-          totalCollections: collectionsData.length,
-        });
+        if (ordersRes.ok) {
+          const ordersData = await ordersRes.json();
+          setOrders(ordersData);
+          
+          // Calculate stats
+          const totalRevenue = ordersData.reduce((sum: number, order: any) => sum + (order.vendorEarnings || 0), 0);
+          setStats({
+            totalRevenue,
+            totalOrders: ordersData.length,
+            totalProducts: productsData.length,
+            totalCollections: collectionsData.length,
+          });
+        }
 
         setLoading(false);
       } catch (error) {
@@ -80,11 +92,21 @@ const VendorDetailPage = () => {
       }
     };
 
-    fetchVendorData();
-  }, [params.vendorId, isAdmin, isVendor, role, router]);
+    if (role) {
+      fetchVendorData();
+    }
+  }, [params.vendorId, isAdmin, isVendor, role, router, user?.id]);
 
   if (loading) return <Loader />;
-  if (!vendor) return <div>Vendor not found</div>;
+  
+  if (!vendor) {
+    return (
+      <div className="px-10 py-5">
+        <p className="text-heading2-bold">Vendor not found</p>
+        <p className="text-grey-1 mt-5">The vendor you're looking for doesn't exist or has been removed.</p>
+      </div>
+    );
+  }
 
   const statusColors = {
     pending: "bg-yellow-100 text-yellow-800",
@@ -96,9 +118,20 @@ const VendorDetailPage = () => {
   return (
     <div className="px-10 py-5">
       <div className="flex justify-between items-start mb-5">
-        <div>
-          <h1 className="text-heading2-bold">{vendor.businessName}</h1>
-          <p className="text-grey-1">{vendor.email}</p>
+        <div className="flex items-center gap-4">
+          {vendor.logo && (
+            <Image
+              src={vendor.logo}
+              alt="Vendor Logo"
+              width={80}
+              height={80}
+              className="rounded-full object-cover"
+            />
+          )}
+          <div>
+            <h1 className="text-heading2-bold">{vendor.businessName}</h1>
+            <p className="text-grey-1">{vendor.email}</p>
+          </div>
         </div>
         <Badge className={statusColors[vendor.status]}>
           {vendor.status.charAt(0).toUpperCase() + vendor.status.slice(1)}
@@ -147,55 +180,13 @@ const VendorDetailPage = () => {
         </Card>
       </div>
 
-      <Tabs defaultValue="products" className="w-full">
+      <Tabs defaultValue="details" className="w-full">
         <TabsList>
+          <TabsTrigger value="details">Business Details</TabsTrigger>
           <TabsTrigger value="products">Products</TabsTrigger>
           <TabsTrigger value="collections">Collections</TabsTrigger>
           <TabsTrigger value="orders">Orders</TabsTrigger>
-          <TabsTrigger value="details">Business Details</TabsTrigger>
         </TabsList>
-        
-        <TabsContent value="products">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-heading3-bold">Products</h2>
-            <Link href={`/vendors/${vendor._id}/products`}>
-              <Button className="bg-blue-1 text-white">
-                View All Products
-              </Button>
-            </Link>
-          </div>
-          <p className="text-body-medium text-grey-1">
-            Total Products: {stats.totalProducts}
-          </p>
-        </TabsContent>
-        
-        <TabsContent value="collections">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-heading3-bold">Collections</h2>
-            <Link href={`/vendors/${vendor._id}/collections`}>
-              <Button className="bg-blue-1 text-white">
-                View All Collections
-              </Button>
-            </Link>
-          </div>
-          <p className="text-body-medium text-grey-1">
-            Total Collections: {stats.totalCollections}
-          </p>
-        </TabsContent>
-        
-        <TabsContent value="orders">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-heading3-bold">Orders</h2>
-            <Link href={`/vendors/${vendor._id}/orders`}>
-              <Button className="bg-blue-1 text-white">
-                View All Orders
-              </Button>
-            </Link>
-          </div>
-          <p className="text-body-medium text-grey-1">
-            Total Orders: {stats.totalOrders}
-          </p>
-        </TabsContent>
         
         <TabsContent value="details">
           <div className="space-y-6">
@@ -270,7 +261,57 @@ const VendorDetailPage = () => {
                 </div>
               </div>
             )}
+            
+            {vendor.rejectionReason && (
+              <div className="mt-4 p-4 bg-red-50 rounded-lg">
+                <p className="text-body-medium text-red-800">
+                  <span className="font-semibold">Rejection Reason:</span> {vendor.rejectionReason}
+                </p>
+              </div>
+            )}
           </div>
+        </TabsContent>
+        
+        <TabsContent value="products">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-heading3-bold">Products</h2>
+            <Link href={`/vendors/${vendor._id}/products`}>
+              <Button className="bg-blue-1 text-white">
+                View All Products
+              </Button>
+            </Link>
+          </div>
+          <p className="text-body-medium text-grey-1">
+            Total Products: {stats.totalProducts}
+          </p>
+        </TabsContent>
+        
+        <TabsContent value="collections">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-heading3-bold">Collections</h2>
+            <Link href={`/vendors/${vendor._id}/collections`}>
+              <Button className="bg-blue-1 text-white">
+                View All Collections
+              </Button>
+            </Link>
+          </div>
+          <p className="text-body-medium text-grey-1">
+            Total Collections: {stats.totalCollections}
+          </p>
+        </TabsContent>
+        
+        <TabsContent value="orders">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-heading3-bold">Orders</h2>
+            <Link href={`/vendors/${vendor._id}/orders`}>
+              <Button className="bg-blue-1 text-white">
+                View All Orders
+              </Button>
+            </Link>
+          </div>
+          <p className="text-body-medium text-grey-1">
+            Total Orders: {stats.totalOrders}
+          </p>
         </TabsContent>
       </Tabs>
     </div>
