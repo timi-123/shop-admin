@@ -60,11 +60,7 @@ export const getNavLinks = (role: string | null, vendorId?: string) => {
         icon: <Store />,
         label: "Vendors",
       },
-      {
-        url: "/pending-approvals",
-        icon: <FileText />,
-        label: "Pending Approvals",
-      },
+    
     ];
   }
 
