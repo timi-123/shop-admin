@@ -1,4 +1,3 @@
-// lib/constants.tsx
 // lib/constants.tsx (Updated)
 import {
   LayoutDashboard,
@@ -8,6 +7,7 @@ import {
   UsersRound,
   Store,
   FileText,
+  MessageSquare,
 } from "lucide-react";
 
 export const getNavLinks = (role: string | null, vendorId?: string) => {
@@ -51,7 +51,7 @@ export const getNavLinks = (role: string | null, vendorId?: string) => {
     ];
   }
 
-  // Admin main navigation - ONLY vendors and pending approvals
+  // Admin main navigation - vendors, appeals, and pending approvals
   if (role === "admin") {
     return [
       ...baseLinks,
@@ -60,7 +60,11 @@ export const getNavLinks = (role: string | null, vendorId?: string) => {
         icon: <Store />,
         label: "Vendors",
       },
-    
+      {
+        url: "/appeals",
+        icon: <MessageSquare />,
+        label: "Appeals",
+      },
     ];
   }
 

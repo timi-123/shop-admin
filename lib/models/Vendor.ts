@@ -1,4 +1,4 @@
-// lib/models/Vendor.ts
+// lib/models/Vendor.ts (Updated)
 import mongoose from "mongoose";
 
 const vendorSchema = new mongoose.Schema({
@@ -17,7 +17,7 @@ const vendorSchema = new mongoose.Schema({
   },
   phoneNumber: String,
   businessDescription: String,
-  logo: String, // Add logo field
+  logo: String,
   businessAddress: {
     street: String,
     city: String,
@@ -51,8 +51,22 @@ const vendorSchema = new mongoose.Schema({
   rejectionReason: String,
   approvedAt: Date,
   approvedBy: String,
+  
+  // Suspension fields
   suspendedAt: Date,
   suspendedReason: String,
+  suspendedBy: String,
+  
+  // Appeal system fields
+  appealSubmitted: {
+    type: Boolean,
+    default: false,
+  },
+  appealReason: String,
+  appealSubmittedAt: Date,
+  appealResponse: String,
+  appealResponseAt: Date,
+  
   createdAt: {
     type: Date,
     default: Date.now,

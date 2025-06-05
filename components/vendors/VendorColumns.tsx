@@ -1,11 +1,13 @@
-// components/vendors/VendorColumns.tsx
+// components/vendors/VendorColumns.tsx (Updated)
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Eye, CheckCircle, XCircle, Ban } from "lucide-react";
+import { Eye, CheckCircle, XCircle, Ban, RotateCcw } from "lucide-react";
+import SuspensionDialog from "./SuspensionDialog";
+import AppealResponseDialog from "./AppealResponseDialog";
 
 export const vendorColumns: ColumnDef<VendorType>[] = [
   {
@@ -28,7 +30,7 @@ export const vendorColumns: ColumnDef<VendorType>[] = [
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => {
-      const status = row.original.status;
+      const vendor = row.original;
       const statusColors = {
         pending: "bg-yellow-100 text-yellow-800",
         approved: "bg-green-100 text-green-800",
@@ -37,9 +39,16 @@ export const vendorColumns: ColumnDef<VendorType>[] = [
       };
       
       return (
-        <Badge className={statusColors[status]}>
-          {status.charAt(0).toUpperCase() + status.slice(1)}
-        </Badge>
+        <div className="flex flex-col gap-1">
+          <Badge className={statusColors[vendor.status]}>
+            {vendor.status.charAt(0).toUpperCase() + vendor.status.slice(1)}
+          </Badge>
+          {vendor.appealSubmitted && (
+            <Badge className="bg-blue-100 text-blue-800 text-xs">
+              Appeal Pending
+            </Badge>
+          )}
+        </div>
       );
     },
   },
@@ -56,6 +65,10 @@ export const vendorColumns: ColumnDef<VendorType>[] = [
     cell: ({ row }) => {
       const vendor = row.original;
       
+      const handleRefresh = () => {
+        window.location.reload();
+      };
+      
       return (
         <div className="flex gap-2">
           <Link href={`/vendors/${vendor._id}`}>
@@ -71,7 +84,6 @@ export const vendorColumns: ColumnDef<VendorType>[] = [
                 variant="outline"
                 className="hover:bg-green-100"
                 onClick={() => {
-                  // Handle approval
                   fetch(`/api/vendors/${vendor._id}/approve`, {
                     method: "POST",
                   }).then(() => window.location.reload());
@@ -85,7 +97,6 @@ export const vendorColumns: ColumnDef<VendorType>[] = [
                 variant="outline"
                 className="hover:bg-red-100"
                 onClick={() => {
-                  // Handle rejection
                   const reason = prompt("Rejection reason:");
                   if (reason) {
                     fetch(`/api/vendors/${vendor._id}/reject`, {
@@ -102,24 +113,28 @@ export const vendorColumns: ColumnDef<VendorType>[] = [
           )}
           
           {vendor.status === "approved" && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="hover:bg-gray-100"
-              onClick={() => {
-                // Handle suspension
-                const reason = prompt("Suspension reason:");
-                if (reason) {
-                  fetch(`/api/vendors/${vendor._id}/suspend`, {
+            <SuspensionDialog vendor={vendor} onSuspensionComplete={handleRefresh} />
+          )}
+          
+          {vendor.status === "suspended" && (
+            <>
+              {vendor.appealSubmitted && (
+                <AppealResponseDialog vendor={vendor} onResponseSent={handleRefresh} />
+              )}
+              
+              <Button
+                size="sm"
+                variant="outline"
+                className="hover:bg-green-100"
+                onClick={() => {
+                  fetch(`/api/vendors/${vendor._id}/unsuspend`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ reason }),
                   }).then(() => window.location.reload());
-                }
-              }}
-            >
-              <Ban className="h-4 w-4 text-gray-600" />
-            </Button>
+                }}
+              >
+                <RotateCcw className="h-4 w-4 text-green-600" />
+              </Button>
+            </>
           )}
         </div>
       );

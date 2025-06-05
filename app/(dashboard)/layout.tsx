@@ -1,4 +1,4 @@
-// app/(dashboard)/layout.tsx (FIXED VERSION)
+// app/(dashboard)/layout.tsx (Updated with VendorAccessGuard)
 "use client";
 
 import type { Metadata } from "next";
@@ -10,6 +10,7 @@ import LeftSideBar from "@/components/layout/LeftSideBar";
 import TopBar from "@/components/layout/TopBar";
 import { ToasterProvider } from "@/lib/ToasterProvider";
 import RoleGuard from "@/components/auth/RoleGuard";
+import VendorAccessGuard from "@/components/auth/VendorAccessGuard";
 import { useRole } from "@/lib/hooks/useRole";
 import { usePathname } from "next/navigation";
 
@@ -38,7 +39,9 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   if (showLandingLayout) {
     return (
       <div className="min-h-screen">
-        {children}
+        <VendorAccessGuard>
+          {children}
+        </VendorAccessGuard>
       </div>
     );
   }
@@ -48,13 +51,15 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   // 2. Regular users on vendor-application page
   // 3. Any authenticated user on any page except root
   return (
-    <div className="flex max-lg:flex-col text-grey-1">
-      <LeftSideBar />
-      <TopBar />
-      <div className="flex-1">
-        {children}
+    <VendorAccessGuard>
+      <div className="flex max-lg:flex-col text-grey-1">
+        <LeftSideBar />
+        <TopBar />
+        <div className="flex-1">
+          {children}
+        </div>
       </div>
-    </div>
+    </VendorAccessGuard>
   );
 }
 

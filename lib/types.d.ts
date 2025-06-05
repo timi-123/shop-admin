@@ -1,4 +1,4 @@
-// lib/types.d.ts
+// lib/types.d.ts (Updated)
 type VendorType = {
   _id: string;
   clerkId: string;
@@ -6,7 +6,7 @@ type VendorType = {
   email: string;
   phoneNumber?: string;
   businessDescription?: string;
-  logo?: string; // Add logo field
+  logo?: string;
   businessAddress?: {
     street: string;
     city: string;
@@ -35,8 +35,19 @@ type VendorType = {
   rejectionReason?: string;
   approvedAt?: Date;
   approvedBy?: string;
+  
+  // Suspension fields
   suspendedAt?: Date;
   suspendedReason?: string;
+  suspendedBy?: string;
+  
+  // Appeal system fields
+  appealSubmitted: boolean;
+  appealReason?: string;
+  appealSubmittedAt?: Date;
+  appealResponse?: string;
+  appealResponseAt?: Date;
+  
   createdAt: Date;
   updatedAt: Date;
 }
