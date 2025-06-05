@@ -1,4 +1,4 @@
-// middleware.ts (Updated for admin dashboard)
+// middleware.ts (UPDATED)
 import { authMiddleware } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -13,7 +13,8 @@ export default authMiddleware({
     "/api/vendors/public/(.*)",
     "/sign-in",
     "/sign-up",
-    "/vendor-application"
+    "/vendor-application",
+    "/" // Make root route public for landing page
   ],
   afterAuth(auth, req) {
     const { pathname } = req.nextUrl;
@@ -41,12 +42,12 @@ export default authMiddleware({
       return response;
     }
 
-    // Always allow sign-in, sign-up, and vendor application pages
-    if (pathname.startsWith('/sign-in') || pathname.startsWith('/sign-up') || pathname.startsWith('/vendor-application')) {
+    // Always allow root path, sign-in, sign-up, and vendor application pages
+    if (pathname === '/' || pathname.startsWith('/sign-in') || pathname.startsWith('/sign-up') || pathname.startsWith('/vendor-application')) {
       return NextResponse.next();
     }
 
-    // If user is not authenticated, redirect to sign-in
+    // For all other protected routes, require authentication
     if (!auth.userId) {
       return NextResponse.redirect(new URL('/sign-in', req.url));
     }

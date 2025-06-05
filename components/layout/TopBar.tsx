@@ -1,4 +1,4 @@
-// components/layout/TopBar.tsx
+// components/layout/TopBar.tsx (UPDATED)
 "use client"
 
 import { UserButton, useUser } from "@clerk/nextjs";
@@ -58,7 +58,14 @@ const TopBar = () => {
             ))}
           </div>
         )}
-        <UserButton />
+        <UserButton 
+          afterSignOutUrl="/"
+          appearance={{
+            elements: {
+              avatarBox: "h-10 w-10"
+            }
+          }}
+        />
       </div>
     </div>
   );

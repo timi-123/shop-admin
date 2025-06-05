@@ -1,3 +1,4 @@
+// components/custom ui/SalesChart.tsx - Make sure this matches your file
 "use client"
 
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'

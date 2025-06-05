@@ -1,4 +1,4 @@
-// components/layout/LeftSideBar.tsx
+// components/layout/LeftSideBar.tsx (UPDATED)
 "use client"
 
 import { UserButton, useUser } from "@clerk/nextjs";
@@ -48,7 +48,14 @@ const LeftSideBar = () => {
       </div>
 
       <div className="flex gap-4 text-body-medium items-center">
-        <UserButton />
+        <UserButton 
+          afterSignOutUrl="/"
+          appearance={{
+            elements: {
+              avatarBox: "h-10 w-10"
+            }
+          }}
+        />
         <p>Edit Profile</p>
       </div>
     </div>

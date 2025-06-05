@@ -1,39 +1,32 @@
-import Customer from "../models/Customer";
-import Order from "../models/Order";
-import { connectToDB } from "../mongoDB"
+// lib/actions/actions.ts - REPLACE ENTIRE FILE WITH THIS
 
 export const getTotalSales = async () => {
-  await connectToDB();
-  const orders = await Order.find()
-  const totalOrders = orders.length;
-  const totalRevenue = orders.reduce((acc, order) => acc + order.totalAmount, 0)
-  return { totalOrders, totalRevenue }
-}
+  // Mock data for dashboard
+  return { 
+    totalOrders: 150, 
+    totalRevenue: 25780.50 
+  };
+};
 
 export const getTotalCustomers = async () => {
-  await connectToDB();
-  const customers = await Customer.find()
-  const totalCustomers = customers.length
-  return totalCustomers
-}
+  // Mock data for dashboard
+  return 87;
+};
 
 export const getSalesPerMonth = async () => {
-  await connectToDB()
-  const orders = await Order.find()
-
-  const salesPerMonth = orders.reduce((acc, order) => {
-    const monthIndex = new Date(order.createdAt).getMonth(); // 0 for Janruary --> 11 for December
-    acc[monthIndex] = (acc[monthIndex] || 0) + order.totalAmount;
-    // For June
-    // acc[5] = (acc[5] || 0) + order.totalAmount (orders have monthIndex 5)
-    return acc
-  }, {})
-
-  const graphData = Array.from({ length: 12}, (_, i) => {
-    const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date(0, i))
-    // if i === 5 => month = "Jun"
-    return { name: month, sales: salesPerMonth[i] || 0 }
-  })
-
-  return graphData
-}
+  // Mock data for chart
+  return [
+    { name: 'Jan', sales: 8400 },
+    { name: 'Feb', sales: 7200 },
+    { name: 'Mar', sales: 9800 },
+    { name: 'Apr', sales: 11200 },
+    { name: 'May', sales: 10500 },
+    { name: 'Jun', sales: 12800 },
+    { name: 'Jul', sales: 14200 },
+    { name: 'Aug', sales: 13100 },
+    { name: 'Sep', sales: 11900 },
+    { name: 'Oct', sales: 10300 },
+    { name: 'Nov', sales: 9600 },
+    { name: 'Dec', sales: 15400 }
+  ];
+};
