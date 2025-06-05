@@ -1,4 +1,4 @@
-// lib/types.d.ts (Updated)
+// lib/types.d.ts - Updated with proper vendor typing
 type VendorType = {
   _id: string;
   clerkId: string;
@@ -35,19 +35,14 @@ type VendorType = {
   rejectionReason?: string;
   approvedAt?: Date;
   approvedBy?: string;
-  
-  // Suspension fields
   suspendedAt?: Date;
   suspendedReason?: string;
   suspendedBy?: string;
-  
-  // Appeal system fields
-  appealSubmitted: boolean;
+  appealSubmitted?: boolean;
   appealReason?: string;
   appealSubmittedAt?: Date;
   appealResponse?: string;
   appealResponseAt?: Date;
-  
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,7 +52,7 @@ type CollectionType = {
   title: string;
   description: string;
   image: string;
-  vendor: string | VendorType;
+  vendor: string | VendorType; // Can be populated or just ID
   products: ProductType[];
   isActive: boolean;
   createdAt: Date;
@@ -77,7 +72,7 @@ type ProductType = {
   price: number;
   expense: number;
   cost?: number;
-  vendor: string | VendorType;
+  vendor: string | VendorType; // Can be populated or just ID
   isApproved: boolean;
   stockQuantity: number;
   createdAt: string | Date;

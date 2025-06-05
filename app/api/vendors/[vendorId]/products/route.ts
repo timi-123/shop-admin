@@ -1,4 +1,4 @@
-// app/api/vendors/[vendorId]/products/route.ts
+// app/api/vendors/[vendorId]/products/route.ts - Updated without cost and tags
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs";
 import { connectToDB } from "@/lib/mongoDB";
@@ -6,67 +6,6 @@ import Product from "@/lib/models/Product";
 import Collection from "@/lib/models/Collection";
 import Vendor from "@/lib/models/Vendor";
 import Role from "@/lib/models/Role";
-
-// app/api/vendors/[vendorId]/products/route.ts
-// Only updating the GET method for better error handling
-
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { vendorId: string } }
-) {
-  try {
-    const { userId } = auth();
-    
-    if (!userId) {
-      console.log("No userId found in auth");
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    console.log(`GET products for vendor: ${params.vendorId}, requested by user: ${userId}`);
-    await connectToDB();
-
-    // Get vendor first to verify it exists
-    const vendor = await Vendor.findById(params.vendorId);
-    
-    if (!vendor) {
-      console.log(`Vendor not found with ID: ${params.vendorId}`);
-      return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
-    }
-
-    // Check permissions
-    const userRole = await Role.findOne({ clerkId: userId });
-    const isAdmin = userRole?.role === "admin";
-    const isVendorOwner = vendor.clerkId === userId;
-
-    console.log(`Permission check: isAdmin=${isAdmin}, isVendorOwner=${isVendorOwner}, vendorClerkId=${vendor.clerkId}`);
-
-    if (!isAdmin && !isVendorOwner) {
-      console.log(`Permission denied for user ${userId}`);
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    // Get vendor products
-    const products = await Product.find({ 
-      vendor: params.vendorId 
-    })
-      .populate({ 
-        path: "collections", 
-        model: Collection,
-        select: "title _id" 
-      })
-      .sort({ createdAt: "desc" });
-
-    console.log(`Found ${products.length} products for vendor ${params.vendorId}`);
-    
-    return NextResponse.json(products, { status: 200 });
-  } catch (error) {
-    console.error(`Error fetching vendor products for ${params.vendorId}:`, error);
-    return NextResponse.json(
-      { error: "Failed to fetch vendor products" },
-      { status: 500 }
-    );
-  }
-}
 
 export async function POST(
   req: NextRequest,
@@ -124,20 +63,26 @@ export async function POST(
     const productData = await req.json();
     console.log("Product data received:", JSON.stringify(productData, null, 2));
 
-    // Validate required fields
-    if (!productData.title || !productData.media || productData.media.length === 0 || !productData.category) {
+    // Validate required fields (removed category from validation)
+    if (!productData.title || !productData.media || productData.media.length === 0 || !productData.price) {
       console.log("Validation error: Missing required fields");
       return NextResponse.json(
-        { error: "Title, media, and category are required" },
+        { error: "Title, media, and price are required" },
         { status: 400 }
       );
     }
 
     console.log("Creating product for vendor:", params.vendorId);
     
-    // Create new product
+    // Create new product (removed category)
     const newProduct = await Product.create({
-      ...productData,
+      title: productData.title,
+      description: productData.description,
+      media: productData.media,
+      collections: productData.collections,
+      sizes: productData.sizes,
+      colors: productData.colors,
+      price: productData.price,
       vendor: params.vendorId,
     });
 
@@ -182,6 +127,3 @@ export async function POST(
     );
   }
 }
-
-// Add support for dynamic route
-export const dynamic = "force-dynamic";

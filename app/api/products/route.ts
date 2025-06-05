@@ -1,9 +1,11 @@
+// app/api/products/route.ts - Updated to populate vendor data
 import { auth } from "@clerk/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 
 import { connectToDB } from "@/lib/mongoDB";
 import Product from "@/lib/models/Product";
 import Collection from "@/lib/models/Collection";
+import Vendor from "@/lib/models/Vendor";
 
 export const POST = async (req: NextRequest) => {
   try {
@@ -19,16 +21,13 @@ export const POST = async (req: NextRequest) => {
       title,
       description,
       media,
-      category,
       collections,
-      tags,
       sizes,
       colors,
       price,
-      expense,
     } = await req.json();
 
-    if (!title || !description || !media || !category || !price || !expense) {
+    if (!title || !description || !media || !price) {
       return new NextResponse("Not enough data to create a product", {
         status: 400,
       });
@@ -38,13 +37,10 @@ export const POST = async (req: NextRequest) => {
       title,
       description,
       media,
-      category,
       collections,
-      tags,
       sizes,
       colors,
       price,
-      expense,
     });
 
     await newProduct.save();
@@ -72,7 +68,15 @@ export const GET = async (req: NextRequest) => {
 
     const products = await Product.find()
       .sort({ createdAt: "desc" })
-      .populate({ path: "collections", model: Collection });
+      .populate({ 
+        path: "collections", 
+        model: Collection 
+      })
+      .populate({ 
+        path: "vendor", 
+        model: Vendor,
+        select: "businessName email _id status" // Only select needed fields
+      });
 
     return NextResponse.json(products, { 
       status: 200,
@@ -101,4 +105,3 @@ export const OPTIONS = async () => {
 };
 
 export const dynamic = "force-dynamic";
-

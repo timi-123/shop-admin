@@ -1,8 +1,10 @@
+// app/api/collections/route.ts - Updated to populate vendor data
 import { connectToDB } from "@/lib/mongoDB";
 import { auth } from "@clerk/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 
 import Collection from "@/lib/models/Collection";
+import Vendor from "@/lib/models/Vendor";
 
 export const POST = async (req: NextRequest) => {
   try {
@@ -45,7 +47,13 @@ export const GET = async (req: NextRequest) => {
   try {
     await connectToDB();
 
-    const collections = await Collection.find().sort({ createdAt: "desc" });
+    const collections = await Collection.find()
+      .sort({ createdAt: "desc" })
+      .populate({ 
+        path: "vendor", 
+        model: Vendor,
+        select: "businessName email _id status" // Only select needed fields
+      });
 
     return NextResponse.json(collections, { 
       status: 200, 

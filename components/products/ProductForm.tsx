@@ -1,4 +1,4 @@
-// components/products/ProductForm.tsx
+// components/products/ProductForm.tsx - Updated without Cost and Tags
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -31,13 +31,10 @@ const formSchema = z.object({
   title: z.string().min(2).max(100),
   description: z.string().min(2).max(500).trim(),
   media: z.array(z.string()).min(1, "At least one image is required"),
-  category: z.string().min(2),
   collections: z.array(z.string()),
-  tags: z.array(z.string()),
   sizes: z.array(z.string()),
   colors: z.array(z.string()),
   price: z.coerce.number().min(0.1),
-  expense: z.coerce.number().min(0.1),
 });
 
 interface ProductFormProps {
@@ -100,24 +97,26 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData
+            defaultValues: initialData
       ? {
-          ...initialData,
+          title: initialData.title,
+          description: initialData.description,
+          media: initialData.media,
           collections: initialData.collections.map(
             (collection) => collection._id
           ),
+          sizes: initialData.sizes,
+          colors: initialData.colors,
+          price: initialData.price,
         }
       : {
           title: "",
           description: "",
           media: [],
-          category: "",
           collections: [],
-          tags: [],
           sizes: [],
           colors: [],
           price: 0.1,
-          expense: 0.1,
         },
   });
 
@@ -238,7 +237,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
                 <FormLabel>Title</FormLabel>
                 <FormControl>
                   <Input
-                    placeholder="Title"
+                    placeholder="Product title"
                     {...field}
                     onKeyDown={handleKeyPress}
                   />
@@ -255,7 +254,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
                 <FormLabel>Description</FormLabel>
                 <FormControl>
                   <Textarea
-                    placeholder="Description"
+                    placeholder="Product description"
                     {...field}
                     rows={5}
                     onKeyDown={handleKeyPress}
@@ -287,7 +286,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
             )}
           />
 
-          <div className="md:grid md:grid-cols-3 gap-8">
+          <div className="md:grid md:grid-cols-1 gap-8">
             <FormField
               control={form.control}
               name="price"
@@ -297,7 +296,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
                   <FormControl>
                     <Input
                       type="number"
-                      placeholder="Price"
+                      placeholder="0.00"
                       {...field}
                       onKeyDown={handleKeyPress}
                     />
@@ -306,63 +305,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="expense"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Cost ($)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="Cost"
-                      {...field}
-                      onKeyDown={handleKeyPress}
-                    />
-                  </FormControl>
-                  <FormMessage className="text-red-1" />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="category"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Category"
-                      {...field}
-                      onKeyDown={handleKeyPress}
-                    />
-                  </FormControl>
-                  <FormMessage className="text-red-1" />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="tags"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tags</FormLabel>
-                  <FormControl>
-                    <MultiText
-                      placeholder="Tags"
-                      value={field.value}
-                      onChange={(tag) => field.onChange([...field.value, tag])}
-                      onRemove={(tagToRemove) =>
-                        field.onChange([
-                          ...field.value.filter((tag) => tag !== tagToRemove),
-                        ])
-                      }
-                    />
-                  </FormControl>
-                  <FormMessage className="text-red-1" />
-                </FormItem>
-              )}
-            />
+          </div>
+
+          <div className="md:grid md:grid-cols-3 gap-8">
             {collections.length > 0 && (
               <FormField
                 control={form.control}
@@ -372,7 +317,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
                     <FormLabel>Collections</FormLabel>
                     <FormControl>
                       <MultiSelect
-                        placeholder="Collections"
+                        placeholder="Select collections"
                         collections={collections}
                         value={field.value}
                         onChange={(_id) =>
@@ -400,7 +345,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
                   <FormLabel>Colors</FormLabel>
                   <FormControl>
                     <MultiText
-                      placeholder="Colors"
+                      placeholder="Add colors (e.g., Red, Blue, Green)"
                       value={field.value}
                       onChange={(color) =>
                         field.onChange([...field.value, color])
@@ -426,7 +371,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
                   <FormLabel>Sizes</FormLabel>
                   <FormControl>
                     <MultiText
-                      placeholder="Sizes"
+                      placeholder="Add sizes (e.g., S, M, L, XL)"
                       value={field.value}
                       onChange={(size) =>
                         field.onChange([...field.value, size])

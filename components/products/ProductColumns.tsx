@@ -1,8 +1,10 @@
+// components/products/ProductColumns.tsx - Updated with Vendor Column
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
 import Delete from "../custom ui/Delete";
 import Link from "next/link";
+import { Badge } from "../ui/badge";
 
 export const columns: ColumnDef<ProductType>[] = [
   {
@@ -18,8 +20,41 @@ export const columns: ColumnDef<ProductType>[] = [
     ),
   },
   {
-    accessorKey: "category",
-    header: "Category",
+    accessorKey: "vendor",
+    header: "Vendor",
+    cell: ({ row }) => {
+      const vendor = row.original.vendor;
+      
+      // Handle populated vendor data
+      if (typeof vendor === 'object' && vendor !== null) {
+        return (
+          <Link
+            href={`/vendors/${vendor._id}`}
+            className="hover:text-blue-600 transition-colors duration-200"
+          >
+            <div className="font-medium text-gray-900 hover:text-blue-600 cursor-pointer">
+              {vendor.businessName}
+            </div>
+          </Link>
+        );
+      }
+      
+      // If vendor is just an ID string
+      if (typeof vendor === 'string') {
+        return (
+          <Link
+            href={`/vendors/${vendor}`}
+            className="font-medium text-blue-600 hover:text-blue-800 transition-colors duration-200"
+          >
+            View Vendor Details
+          </Link>
+        );
+      }
+      
+      return (
+        <span className="text-gray-400 font-medium">No vendor assigned</span>
+      );
+    },
   },
   {
     accessorKey: "collections",
@@ -31,8 +66,21 @@ export const columns: ColumnDef<ProductType>[] = [
     header: "Price ($)",
   },
   {
-    accessorKey: "expense",
-    header: "Expense ($)",
+    accessorKey: "isApproved",
+    header: "Status",
+    cell: ({ row }) => {
+      const isApproved = row.original.isApproved;
+      return (
+        <Badge 
+          className={isApproved 
+            ? "bg-green-100 text-green-800" 
+            : "bg-yellow-100 text-yellow-800"
+          }
+        >
+          {isApproved ? "Approved" : "Pending"}
+        </Badge>
+      );
+    },
   },
   {
     id: "actions",

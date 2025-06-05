@@ -1,4 +1,4 @@
-// app/(dashboard)/page.tsx - FULL BEAUTIFUL VERSION
+// app/(dashboard)/page.tsx - FIXED VERSION
 "use client";
 
 import { useUser } from "@clerk/nextjs";
@@ -21,10 +21,12 @@ import {
   ArrowRight,
   Store,
   Globe,
-  Sparkles
+  Sparkles,
+  DollarSign,
+  Package
 } from "lucide-react";
 
-// Beautiful Landing Page Component
+// Beautiful Landing Page Component (Only for non-authenticated users)
 const LandingPageContent = () => {
   const features = [
     {
@@ -216,28 +218,202 @@ const LandingPageContent = () => {
   );
 };
 
-// Main Component
-export default function Home() {
-  const { user, isLoaded } = useUser();
-  const { role, loading: roleLoading } = useRole();
+// Vendor Dashboard Component
+const VendorDashboard = () => {
   const [salesData, setSalesData] = useState<any[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
+  const [vendor, setVendor] = useState<VendorType | null>(null);
+  const [vendorStats, setVendorStats] = useState({
+    totalProducts: 0,
+    totalCollections: 0,
+    vendorEarnings: 0,
+  });
 
   useEffect(() => {
-    setMounted(true);
+    const fetchVendorData = async () => {
+      try {
+        // Get vendor info first
+        const vendorRes = await fetch("/api/vendors/my-vendor");
+        if (vendorRes.ok) {
+          const vendorData = await vendorRes.json();
+          setVendor(vendorData);
+
+          // Get vendor-specific analytics
+          const [salesRes, customersRes, salesChartRes, productsRes, collectionsRes, ordersRes] = await Promise.all([
+            getTotalSales(),
+            getTotalCustomers(),
+            getSalesPerMonth(),
+            fetch(`/api/vendors/${vendorData._id}/products`),
+            fetch(`/api/vendors/${vendorData._id}/collections`),
+            fetch(`/api/vendors/${vendorData._id}/orders`),
+          ]);
+
+          // Process global stats (you might want to filter these by vendor later)
+          setTotalRevenue(salesRes.totalRevenue);
+          setTotalOrders(salesRes.totalOrders);
+          setTotalCustomers(customersRes);
+          setSalesData(salesChartRes);
+
+          // Process vendor-specific stats
+          if (productsRes.ok) {
+            const productsData = await productsRes.json();
+            setVendorStats(prev => ({ ...prev, totalProducts: productsData.length }));
+          }
+
+          if (collectionsRes.ok) {
+            const collectionsData = await collectionsRes.json();
+            setVendorStats(prev => ({ ...prev, totalCollections: collectionsData.length }));
+          }
+
+          if (ordersRes.ok) {
+            const ordersData = await ordersRes.json();
+            const vendorEarnings = ordersData.reduce((sum: number, order: any) => 
+              sum + (order.vendorEarnings || 0), 0
+            );
+            setVendorStats(prev => ({ ...prev, vendorEarnings }));
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching vendor dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchVendorData();
   }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-xl">Loading dashboard...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-8 py-10">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <p className="text-heading2-bold">Vendor Dashboard</p>
+          {vendor && (
+            <p className="text-grey-1 mt-1">Welcome back, {vendor.businessName}!</p>
+          )}
+        </div>
+      </div>
+      
+      <Separator className="bg-grey-1 my-5" />
+
+      {/* Main Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${vendorStats.vendorEarnings.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">
+              Your share after platform fees
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+            <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalOrders}</div>
+            <p className="text-xs text-muted-foreground">
+              Orders containing your products
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">My Products</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{vendorStats.totalProducts}</div>
+            <p className="text-xs text-muted-foreground">
+              Active products in your store
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Collections</CardTitle>
+            <Store className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{vendorStats.totalCollections}</div>
+            <p className="text-xs text-muted-foreground">
+              Product collections created
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Secondary Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Platform Revenue</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${totalRevenue}</div>
+            <p className="text-xs text-muted-foreground">
+              Total platform revenue
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalCustomers}</div>
+            <p className="text-xs text-muted-foreground">
+              Platform customers
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sales Chart */}
+      <Card className="mt-10">
+        <CardHeader>
+          <CardTitle>Sales Chart ($)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SalesChart data={salesData} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+// Admin Dashboard Component  
+const AdminDashboard = () => {
+  const [salesData, setSalesData] = useState<any[]>([]);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [totalCustomers, setTotalCustomers] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!user || !role || (role !== "admin" && role !== "vendor")) {
-        setLoading(false);
-        return;
-      }
-
       try {
         const [salesRes, customersRes, salesChartRes] = await Promise.all([
           getTotalSales(),
@@ -256,10 +432,75 @@ export default function Home() {
       }
     };
 
-    if (isLoaded && !roleLoading && mounted) {
-      fetchData();
-    }
-  }, [user, role, isLoaded, roleLoading, mounted]);
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-xl">Loading dashboard...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-8 py-10">
+      <p className="text-heading2-bold">Admin Dashboard</p>
+      <Separator className="bg-grey-1 my-5" />
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-10">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${totalRevenue}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+            <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalOrders}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalCustomers}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="mt-10">
+        <CardHeader>
+          <CardTitle>Sales Chart ($)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SalesChart data={salesData} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+// Main Component
+export default function Home() {
+  const { user, isLoaded } = useUser();
+  const { role, loading: roleLoading } = useRole();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Show loading while checking authentication
   if (!mounted || !isLoaded || roleLoading) {
@@ -280,57 +521,16 @@ export default function Home() {
     return <LandingPageContent />;
   }
 
-  // Show dashboard for admin and vendor users
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading dashboard...</div>
-      </div>
-    );
+  // Show vendor dashboard for vendors
+  if (role === "vendor") {
+    return <VendorDashboard />;
   }
 
-  return (
-    <div className="px-8 py-10">
-      <p className="text-heading2-bold">Dashboard</p>
-      <Separator className="bg-grey-1 my-5" />
+  // Show admin dashboard for admins
+  if (role === "admin") {
+    return <AdminDashboard />;
+  }
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-10">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${totalRevenue}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalOrders}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalCustomers}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="mt-10">
-        <CardHeader>
-          <CardTitle>Sales Chart ($)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SalesChart data={salesData} />
-        </CardContent>
-      </Card>
-    </div>
-  );
+  // Fallback
+  return <LandingPageContent />;
 }
