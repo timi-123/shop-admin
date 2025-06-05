@@ -1,4 +1,4 @@
-// app/(dashboard)/vendors/page.tsx
+// app/(dashboard)/vendors/page.tsx (Updated with Suspended tab)
 "use client";
 
 import { useEffect, useState } from "react";
@@ -15,6 +15,7 @@ const VendorsPage = () => {
   const [vendors, setVendors] = useState<VendorType[]>([]);
   const [pendingVendors, setPendingVendors] = useState<VendorType[]>([]);
   const [approvedVendors, setApprovedVendors] = useState<VendorType[]>([]);
+  const [suspendedVendors, setSuspendedVendors] = useState<VendorType[]>([]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -27,6 +28,7 @@ const VendorsPage = () => {
         setVendors(data);
         setPendingVendors(data.filter((v: VendorType) => v.status === "pending"));
         setApprovedVendors(data.filter((v: VendorType) => v.status === "approved"));
+        setSuspendedVendors(data.filter((v: VendorType) => v.status === "suspended"));
         setLoading(false);
       } catch (error) {
         console.error("Error fetching vendors:", error);
@@ -61,6 +63,9 @@ const VendorsPage = () => {
           <TabsTrigger value="approved">
             Approved ({approvedVendors.length})
           </TabsTrigger>
+          <TabsTrigger value="suspended">
+            Suspended ({suspendedVendors.length})
+          </TabsTrigger>
           <TabsTrigger value="all">
             All Vendors ({vendors.length})
           </TabsTrigger>
@@ -78,6 +83,14 @@ const VendorsPage = () => {
           <DataTable 
             columns={vendorColumns} 
             data={approvedVendors} 
+            searchKey="businessName"
+          />
+        </TabsContent>
+        
+        <TabsContent value="suspended">
+          <DataTable 
+            columns={vendorColumns} 
+            data={suspendedVendors} 
             searchKey="businessName"
           />
         </TabsContent>

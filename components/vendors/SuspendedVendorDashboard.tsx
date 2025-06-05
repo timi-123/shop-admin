@@ -1,4 +1,4 @@
-// components/vendors/SuspendedVendorDashboard.tsx
+// components/vendors/SuspendedVendorDashboard.tsx - Fixed JSX Console Logs
 "use client";
 
 import { useState, useEffect } from "react";
@@ -47,14 +47,20 @@ const SuspendedVendorDashboard = () => {
   }, [user]);
 
   const handleAppealSubmitted = () => {
-    // Refresh vendor data
+    console.log("=== HANDLE APPEAL SUBMITTED CALLED ===");
+    console.log("Current vendor before update:", vendor);
+    
     if (vendor) {
       setVendor({
         ...vendor,
         appealSubmitted: true,
         appealSubmittedAt: new Date(),
       });
+      
+      console.log("Vendor state updated in parent component");
     }
+    
+
   };
 
   if (loading) return <Loader />;
@@ -67,8 +73,13 @@ const SuspendedVendorDashboard = () => {
     );
   }
 
+  
+  // Check what should render
+  
+
   return (
     <div className="px-10 py-5 max-w-4xl mx-auto">
+
       {/* Header */}
       <div className="text-center mb-8">
         <div className="flex items-center justify-between mb-4">

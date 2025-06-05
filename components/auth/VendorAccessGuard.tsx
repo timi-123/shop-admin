@@ -30,6 +30,12 @@ const VendorAccessGuard: React.FC<VendorAccessGuardProps> = ({ children }) => {
         const response = await fetch("/api/vendors/my-vendor");
         if (response.ok) {
           const vendorData = await response.json();
+
+            console.log("=== VENDOR ACCESS GUARD ===");
+      console.log("Vendor data loaded:", vendorData);
+      console.log("Vendor status:", vendorData.status);
+      console.log("Appeal submitted:", vendorData.appealSubmitted);
+
           setVendor(vendorData);
         }
       } catch (error) {

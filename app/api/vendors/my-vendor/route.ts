@@ -32,6 +32,13 @@ export async function GET(req: NextRequest) {
     // Find vendor with matching clerkId
     const vendor = await Vendor.findOne({ clerkId: userId });
     
+    console.log("=== MY-VENDOR API DEBUG ===");
+    console.log("User ID:", userId);
+    console.log("Vendor found:", vendor ? "YES" : "NO");
+    console.log("Appeal submitted from DB:", vendor?.appealSubmitted);
+    console.log("Appeal reason from DB:", vendor?.appealReason);
+    console.log("Raw vendor object:", JSON.stringify(vendor, null, 2));
+
     if (!vendor) {
       console.error(`No vendor found for clerkId: ${userId}`);
       return NextResponse.json({ error: "Vendor not found" }, { status: 404 });

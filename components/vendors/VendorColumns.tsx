@@ -1,4 +1,4 @@
-// components/vendors/VendorColumns.tsx (Updated)
+// components/vendors/VendorColumns.tsx (Fixed)
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
@@ -43,9 +43,16 @@ export const vendorColumns: ColumnDef<VendorType>[] = [
           <Badge className={statusColors[vendor.status]}>
             {vendor.status.charAt(0).toUpperCase() + vendor.status.slice(1)}
           </Badge>
-          {vendor.appealSubmitted && (
+          {/* Only show "Appeal Pending" if there's an appeal submitted AND no response yet */}
+          {vendor.appealSubmitted && !vendor.appealResponse && (
             <Badge className="bg-blue-100 text-blue-800 text-xs">
               Appeal Pending
+            </Badge>
+          )}
+          {/* Show "Appeal Responded" if there's a response */}
+          {vendor.appealResponse && (
+            <Badge className="bg-purple-100 text-purple-800 text-xs">
+              Appeal Responded
             </Badge>
           )}
         </div>
@@ -118,7 +125,8 @@ export const vendorColumns: ColumnDef<VendorType>[] = [
           
           {vendor.status === "suspended" && (
             <>
-              {vendor.appealSubmitted && (
+              {/* Only show appeal response dialog if there's an appeal submitted and no response yet */}
+              {vendor.appealSubmitted && !vendor.appealResponse && (
                 <AppealResponseDialog vendor={vendor} onResponseSent={handleRefresh} />
               )}
               
