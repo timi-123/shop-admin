@@ -7,6 +7,7 @@ import { getTotalSales, getTotalCustomers, getSalesPerMonth } from "@/lib/action
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import SalesChart from "@/components/custom ui/SalesChart";
+import Loader from "@/components/custom ui/Loader";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -234,6 +235,10 @@ const VendorDashboard = () => {
 
   useEffect(() => {
     const fetchVendorData = async () => {
+      // Minimum loading time to prevent flicker
+      const startTime = Date.now();
+      const minLoadingTime = 800; // 800ms minimum
+
       try {
         // Get vendor info first
         const vendorRes = await fetch("/api/vendors/my-vendor");
@@ -241,44 +246,48 @@ const VendorDashboard = () => {
           const vendorData = await vendorRes.json();
           setVendor(vendorData);
 
-          // Get vendor-specific analytics
-          const [salesRes, customersRes, salesChartRes, productsRes, collectionsRes, ordersRes] = await Promise.all([
-            getTotalSales(),
-            getTotalCustomers(),
-            getSalesPerMonth(),
-            fetch(`/api/vendors/${vendorData._id}/products`),
-            fetch(`/api/vendors/${vendorData._id}/collections`),
-            fetch(`/api/vendors/${vendorData._id}/orders`),
+          // Get real platform and vendor statistics
+          const [platformStatsRes, salesChartRes, vendorStatsRes] = await Promise.all([
+            fetch("/api/dashboard/stats"), // Real platform stats (same as admin)
+            fetch("/api/dashboard/sales-chart"), // Real sales chart data (same as admin)
+            fetch("/api/dashboard/vendor-stats"), // Real vendor-specific stats
           ]);
 
-          // Process global stats (you might want to filter these by vendor later)
-          setTotalRevenue(salesRes.totalRevenue);
-          setTotalOrders(salesRes.totalOrders);
-          setTotalCustomers(customersRes);
-          setSalesData(salesChartRes);
-
-          // Process vendor-specific stats
-          if (productsRes.ok) {
-            const productsData = await productsRes.json();
-            setVendorStats(prev => ({ ...prev, totalProducts: productsData.length }));
+          // Process platform stats - REAL DATA for all vendors
+          if (platformStatsRes.ok) {
+            const platformStats = await platformStatsRes.json();
+            setTotalRevenue(platformStats.totalRevenue);
+            setTotalOrders(platformStats.totalOrders);
+            setTotalCustomers(platformStats.totalCustomers);
           }
 
-          if (collectionsRes.ok) {
-            const collectionsData = await collectionsRes.json();
-            setVendorStats(prev => ({ ...prev, totalCollections: collectionsData.length }));
+          // Process sales chart data - REAL DATA for all vendors
+          if (salesChartRes.ok) {
+            const salesData = await salesChartRes.json();
+            setSalesData(salesData);
           }
 
-          if (ordersRes.ok) {
-            const ordersData = await ordersRes.json();
-            const vendorEarnings = ordersData.reduce((sum: number, order: any) => 
-              sum + (order.vendorEarnings || 0), 0
-            );
-            setVendorStats(prev => ({ ...prev, vendorEarnings }));
+          // Process vendor-specific stats - REAL DATA for this vendor
+          if (vendorStatsRes.ok) {
+            const vendorStats = await vendorStatsRes.json();
+            setVendorStats({
+              totalProducts: vendorStats.totalProducts,
+              totalCollections: vendorStats.totalCollections,
+              vendorEarnings: vendorStats.vendorEarnings,
+            });
           }
         }
       } catch (error) {
         console.error("Error fetching vendor dashboard data:", error);
       } finally {
+        // Ensure minimum loading time to prevent flicker
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = Math.max(0, minLoadingTime - elapsedTime);
+        
+        if (remainingTime > 0) {
+          await new Promise(resolve => setTimeout(resolve, remainingTime));
+        }
+        
         setLoading(false);
       }
     };
@@ -287,11 +296,7 @@ const VendorDashboard = () => {
   }, []);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading dashboard...</div>
-      </div>
-    );
+    return <Loader />;
   }
 
   return (
@@ -307,8 +312,8 @@ const VendorDashboard = () => {
       
       <Separator className="bg-grey-1 my-5" />
 
-      {/* Main Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
+      {/* Main Stats Grid - VENDOR-SPECIFIC DATA */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-10">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
@@ -318,19 +323,6 @@ const VendorDashboard = () => {
             <div className="text-2xl font-bold">${vendorStats.vendorEarnings.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">
               Your share after platform fees
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <ShoppingBag className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalOrders}</div>
-            <p className="text-xs text-muted-foreground">
-              Orders containing your products
             </p>
           </CardContent>
         </Card>
@@ -362,39 +354,29 @@ const VendorDashboard = () => {
         </Card>
       </div>
 
-      {/* Secondary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+      {/* Secondary Stats - PUBLIC PLATFORM DATA */}
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mb-10">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Platform Revenue</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${totalRevenue}</div>
-            <p className="text-xs text-muted-foreground">
-              Total platform revenue
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
+            <CardTitle className="text-sm font-medium">Platform Customers</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalCustomers}</div>
             <p className="text-xs text-muted-foreground">
-              Platform customers
+              Total registered customers on the platform
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Sales Chart */}
+      {/* Sales Chart - VENDOR'S PERFORMANCE TREND */}
       <Card className="mt-10">
         <CardHeader>
-          <CardTitle>Sales Chart ($)</CardTitle>
+          <CardTitle>Platform Growth Trends</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Overall platform activity trends (for market insights)
+          </p>
         </CardHeader>
         <CardContent>
           <SalesChart data={salesData} />
@@ -404,30 +386,133 @@ const VendorDashboard = () => {
   );
 };
 
-// Admin Dashboard Component  
+// Admin Dashboard Component with Enhanced Features
 const AdminDashboard = () => {
   const [salesData, setSalesData] = useState<any[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [loading, setLoading] = useState(true);
+  
+  // Enhanced admin-specific data
+  const [vendorStats, setVendorStats] = useState({
+    total: 0,
+    pending: 0,
+    approved: 0,
+    suspended: 0,
+    rejected: 0
+  });
+  const [appealStats, setAppealStats] = useState({
+    total: 0,
+    pending: 0,
+    responded: 0
+  });
+  const [urgentNotifications, setUrgentNotifications] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
+      // Minimum loading time to prevent flicker
+      const startTime = Date.now();
+      const minLoadingTime = 800; // 800ms minimum
+
       try {
-        const [salesRes, customersRes, salesChartRes] = await Promise.all([
-          getTotalSales(),
-          getTotalCustomers(),
-          getSalesPerMonth(),
+        // Get real platform statistics
+        const [platformStatsRes, salesChartRes] = await Promise.all([
+          fetch("/api/dashboard/stats"), // Real platform stats
+          fetch("/api/dashboard/sales-chart"), // Real sales chart data
         ]);
 
-        setTotalRevenue(salesRes.totalRevenue);
-        setTotalOrders(salesRes.totalOrders);
-        setTotalCustomers(customersRes);
-        setSalesData(salesChartRes);
+        // Process platform stats
+        if (platformStatsRes.ok) {
+          const platformStats = await platformStatsRes.json();
+          setTotalRevenue(platformStats.totalRevenue);
+          setTotalOrders(platformStats.totalOrders);
+          setTotalCustomers(platformStats.totalCustomers);
+        }
+
+        // Process sales chart data
+        if (salesChartRes.ok) {
+          const salesData = await salesChartRes.json();
+          setSalesData(salesData);
+        }
+
+        // Fetch vendor statistics
+        const vendorsRes = await fetch("/api/vendors");
+        if (vendorsRes.ok) {
+          const vendorsData = await vendorsRes.json();
+          const newVendorStats = {
+            total: vendorsData.length,
+            pending: vendorsData.filter((v: VendorType) => v.status === "pending").length,
+            approved: vendorsData.filter((v: VendorType) => v.status === "approved").length,
+            suspended: vendorsData.filter((v: VendorType) => v.status === "suspended").length,
+            rejected: vendorsData.filter((v: VendorType) => v.status === "rejected").length
+          };
+          setVendorStats(newVendorStats);
+
+          // Fetch appeals statistics
+          const appealsRes = await fetch("/api/appeals");
+          if (appealsRes.ok) {
+            const appealsData = await appealsRes.json();
+            const pendingAppeals = appealsData.filter((v: VendorType) => 
+              v.appealSubmitted && !v.appealResponse
+            ).length;
+            const respondedAppeals = appealsData.filter((v: VendorType) => 
+              v.appealResponse
+            ).length;
+            
+            setAppealStats({
+              total: appealsData.length,
+              pending: pendingAppeals,
+              responded: respondedAppeals
+            });
+
+            // Generate urgent notifications
+            const notifications = [];
+            
+            if (newVendorStats.pending > 0) {
+              notifications.push({
+                type: "warning",
+                title: "Pending Vendor Applications",
+                message: `${newVendorStats.pending} vendor application${newVendorStats.pending > 1 ? 's' : ''} awaiting review`,
+                action: "Review Applications",
+                link: "/vendors"
+              });
+            }
+
+            if (pendingAppeals > 0) {
+              notifications.push({
+                type: "error",
+                title: "Pending Appeals",
+                message: `${pendingAppeals} suspension appeal${pendingAppeals > 1 ? 's' : ''} require admin response`,
+                action: "Review Appeals", 
+                link: "/appeals"
+              });
+            }
+
+            if (newVendorStats.suspended > 3) {
+              notifications.push({
+                type: "warning",
+                title: "High Suspension Rate",
+                message: `${newVendorStats.suspended} vendors currently suspended. Consider reviewing policies.`,
+                action: "View Suspended",
+                link: "/vendors"
+              });
+            }
+
+            setUrgentNotifications(notifications);
+          }
+        }
       } catch (error) {
-        console.error("Error fetching dashboard data:", error);
+        console.error("Error fetching admin dashboard data:", error);
       } finally {
+        // Ensure minimum loading time to prevent flicker
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = Math.max(0, minLoadingTime - elapsedTime);
+        
+        if (remainingTime > 0) {
+          await new Promise(resolve => setTimeout(resolve, remainingTime));
+        }
+        
         setLoading(false);
       }
     };
@@ -436,19 +521,63 @@ const AdminDashboard = () => {
   }, []);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading dashboard...</div>
-      </div>
-    );
+    return <Loader />;
   }
 
   return (
     <div className="px-8 py-10">
-      <p className="text-heading2-bold">Admin Dashboard</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <p className="text-heading2-bold">Super Admin Dashboard</p>
+          <p className="text-grey-1 mt-1">Platform overview and management center</p>
+        </div>
+      </div>
+      
       <Separator className="bg-grey-1 my-5" />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-10">
+      {/* Urgent Notifications */}
+      {urgentNotifications.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <div className="h-2 w-2 bg-red-500 rounded-full animate-pulse"></div>
+            Urgent Notifications
+          </h3>
+          <div className="grid gap-4">
+            {urgentNotifications.map((notification, index) => (
+              <Card key={index} className={`border-l-4 ${
+                notification.type === 'error' ? 'border-red-500 bg-red-50' : 
+                notification.type === 'warning' ? 'border-yellow-500 bg-yellow-50' : 
+                'border-blue-500 bg-blue-50'
+              }`}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-semibold text-gray-800">{notification.title}</h4>
+                      <p className="text-gray-600 text-sm">{notification.message}</p>
+                    </div>
+                    <Link href={notification.link}>
+                      <Button 
+                        size="sm" 
+                        className={
+                          notification.type === 'error' ? 'bg-red-600 hover:bg-red-700' :
+                          notification.type === 'warning' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                          'bg-blue-600 hover:bg-blue-700'
+                        }
+                      >
+                        {notification.action}
+                        <ArrowRight className="ml-1 h-3 w-3" />
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Main Platform Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
@@ -456,6 +585,9 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalRevenue}</div>
+            <p className="text-xs text-muted-foreground">
+              Platform-wide revenue
+            </p>
           </CardContent>
         </Card>
 
@@ -466,6 +598,9 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalOrders}</div>
+            <p className="text-xs text-muted-foreground">
+              All platform orders
+            </p>
           </CardContent>
         </Card>
 
@@ -476,13 +611,162 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalCustomers}</div>
+            <p className="text-xs text-muted-foreground">
+              Registered users
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Vendors</CardTitle>
+            <Store className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{vendorStats.total}</div>
+            <p className="text-xs text-muted-foreground">
+              All vendor accounts
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      <Card className="mt-10">
+      {/* Vendor Management Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Store className="h-5 w-5" />
+              Vendor Status Breakdown
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                  <span className="text-sm">Pending Review</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-yellow-600">{vendorStats.pending}</span>
+                  {vendorStats.pending > 0 && (
+                    <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <span className="text-sm">Approved & Active</span>
+                </div>
+                <span className="font-semibold text-green-600">{vendorStats.approved}</span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+                  <span className="text-sm">Suspended</span>
+                </div>
+                <span className="font-semibold text-gray-600">{vendorStats.suspended}</span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                  <span className="text-sm">Rejected</span>
+                </div>
+                <span className="font-semibold text-red-600">{vendorStats.rejected}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Appeals Management
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm">Pending Appeals</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-yellow-600">{appealStats.pending}</span>
+                  {appealStats.pending > 0 && (
+                    <Link href="/appeals">
+                      <Button size="sm" className="bg-yellow-600 hover:bg-yellow-700">
+                        Review Now
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <span className="text-sm">Responded</span>
+                </div>
+                <span className="font-semibold">{appealStats.responded}</span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+                  <span className="text-sm">Total Suspended</span>
+                </div>
+                <span className="font-semibold">{appealStats.total}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick Actions */}
+      <Card className="mb-8">
         <CardHeader>
-          <CardTitle>Sales Chart ($)</CardTitle>
+          <CardTitle>Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Link href="/vendors">
+              <Button className="w-full" variant="outline">
+                <Store className="mr-2 h-4 w-4" />
+                Manage Vendors
+              </Button>
+            </Link>
+            <Link href="/appeals">
+              <Button className="w-full" variant="outline">
+                <Users className="mr-2 h-4 w-4" />
+                Review Appeals
+              </Button>
+            </Link>
+            <Link href="/orders">
+              <Button className="w-full" variant="outline">
+                <ShoppingBag className="mr-2 h-4 w-4" />
+                View Orders
+              </Button>
+            </Link>
+            <Link href="/customers">
+              <Button className="w-full" variant="outline">
+                <Users className="mr-2 h-4 w-4" />
+                Customer Management
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Sales Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Platform Sales Performance</CardTitle>
         </CardHeader>
         <CardContent>
           <SalesChart data={salesData} />
@@ -497,18 +781,22 @@ export default function Home() {
   const { user, isLoaded } = useUser();
   const { role, loading: roleLoading } = useRole();
   const [mounted, setMounted] = useState(false);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    
+    // Add a small delay to ensure smooth loading transition
+    const timer = setTimeout(() => {
+      setInitialLoadComplete(true);
+    }, 500);
+
+    return () => clearTimeout(timer);
   }, []);
 
-  // Show loading while checking authentication
-  if (!mounted || !isLoaded || roleLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
-      </div>
-    );
+  // Show loading while checking authentication and initial setup
+  if (!mounted || !isLoaded || roleLoading || !initialLoadComplete) {
+    return <Loader />;
   }
 
   // Show landing page if user is not authenticated
