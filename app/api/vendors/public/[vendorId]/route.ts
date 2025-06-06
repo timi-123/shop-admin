@@ -1,4 +1,4 @@
-// app/api/vendors/public/[vendorId]/route.ts
+// app/api/vendors/public/[vendorId]/route.ts - UPDATED to ensure suspended vendors are hidden
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDB } from "@/lib/mongoDB";
 import Vendor from "@/lib/models/Vendor";
@@ -11,9 +11,11 @@ export async function GET(
     await connectToDB();
 
     const vendor = await Vendor.findById(params.vendorId)
-      .select("-bankDetails -taxInfo -adminNotes -rejectionReason");
+      .select("-bankDetails -taxInfo -adminNotes -rejectionReason -suspendedReason -appealReason -appealResponse");
 
+    // Return 404 if vendor doesn't exist OR is not approved (including suspended)
     if (!vendor || vendor.status !== "approved") {
+      console.log(`Vendor ${params.vendorId} not found or not approved. Status: ${vendor?.status}`);
       return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
     }
 

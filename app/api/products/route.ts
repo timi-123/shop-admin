@@ -1,4 +1,4 @@
-// app/api/products/route.ts - Updated to populate vendor data
+// app/api/products/route.ts - UPDATED to exclude products from suspended vendors
 import { auth } from "@clerk/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -66,6 +66,7 @@ export const GET = async (req: NextRequest) => {
   try {
     await connectToDB();
 
+    // Get products and populate vendor info to check status
     const products = await Product.find()
       .sort({ createdAt: "desc" })
       .populate({ 
@@ -75,10 +76,22 @@ export const GET = async (req: NextRequest) => {
       .populate({ 
         path: "vendor", 
         model: Vendor,
-        select: "businessName email _id status" // Only select needed fields
+        select: "businessName email _id status"
       });
 
-    return NextResponse.json(products, { 
+    // Filter out products from suspended vendors for store display
+    const storeProducts = products.filter(product => {
+      // If vendor is populated and has status, check it
+      if (product.vendor && typeof product.vendor === 'object' && 'status' in product.vendor) {
+        return product.vendor.status === 'approved';
+      }
+      // If vendor is just an ID, we'll assume it's approved (shouldn't happen with populate)
+      return true;
+    });
+
+    console.log(`Products API: Total ${products.length}, Store-visible: ${storeProducts.length}`);
+
+    return NextResponse.json(storeProducts, { 
       status: 200,
       headers: {
         "Access-Control-Allow-Origin": `${process.env.ECOMMERCE_STORE_URL || 'http://localhost:3001'}`,

@@ -1,4 +1,4 @@
-// app/api/vendors/public/[vendorId]/products/route.ts
+// app/api/vendors/public/[vendorId]/products/route.ts - UPDATED to ensure suspended vendor products are hidden
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDB } from "@/lib/mongoDB";
 import Product from "@/lib/models/Product";
@@ -12,14 +12,15 @@ export async function GET(
   try {
     await connectToDB();
 
-    // Check if vendor exists and is approved
+    // Check if vendor exists and is approved (not suspended)
     const vendor = await Vendor.findById(params.vendorId);
     
     if (!vendor || vendor.status !== "approved") {
+      console.log(`Vendor ${params.vendorId} not found or not approved. Status: ${vendor?.status}`);
       return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
     }
 
-    // Get vendor products
+    // Get vendor products only if vendor is approved
     const products = await Product.find({ 
       vendor: params.vendorId,
       isApproved: true 

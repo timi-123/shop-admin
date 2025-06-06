@@ -1,4 +1,4 @@
-// app/api/collections/route.ts - Updated to populate vendor data
+// app/api/collections/route.ts - UPDATED to exclude collections from suspended vendors
 import { connectToDB } from "@/lib/mongoDB";
 import { auth } from "@clerk/nextjs";
 import { NextRequest, NextResponse } from "next/server";
@@ -47,15 +47,28 @@ export const GET = async (req: NextRequest) => {
   try {
     await connectToDB();
 
+    // Get collections and populate vendor info to check status
     const collections = await Collection.find()
       .sort({ createdAt: "desc" })
       .populate({ 
         path: "vendor", 
         model: Vendor,
-        select: "businessName email _id status" // Only select needed fields
+        select: "businessName email _id status"
       });
 
-    return NextResponse.json(collections, { 
+    // Filter out collections from suspended vendors for store display
+    const storeCollections = collections.filter(collection => {
+      // If vendor is populated and has status, check it
+      if (collection.vendor && typeof collection.vendor === 'object' && 'status' in collection.vendor) {
+        return collection.vendor.status === 'approved';
+      }
+      // If vendor is just an ID, we'll assume it's approved (shouldn't happen with populate)
+      return true;
+    });
+
+    console.log(`Collections API: Total ${collections.length}, Store-visible: ${storeCollections.length}`);
+
+    return NextResponse.json(storeCollections, { 
       status: 200, 
       headers: {
         "Access-Control-Allow-Origin": `${process.env.ECOMMERCE_STORE_URL || 'http://localhost:3001'}`,

@@ -1,4 +1,4 @@
-// app/api/vendors/public/route.ts
+// app/api/vendors/public/route.ts - UPDATED to ensure suspended vendors are hidden
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDB } from "@/lib/mongoDB";
 import Vendor from "@/lib/models/Vendor";
@@ -8,10 +8,14 @@ export async function GET(req: NextRequest) {
   try {
     await connectToDB();
 
-    // Only get approved vendors
-    const vendors = await Vendor.find({ status: "approved" })
-      .select("-bankDetails -taxInfo -adminNotes -rejectionReason")
+    // Only get approved vendors (exclude suspended, rejected, and pending)
+    const vendors = await Vendor.find({ 
+      status: "approved" // This explicitly excludes suspended vendors
+    })
+      .select("-bankDetails -taxInfo -adminNotes -rejectionReason -suspendedReason -appealReason -appealResponse")
       .sort({ createdAt: "desc" });
+
+    console.log(`Public vendors API: Found ${vendors.length} approved vendors`);
 
     return NextResponse.json(vendors, { 
       status: 200,
