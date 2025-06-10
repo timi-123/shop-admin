@@ -1,129 +1,128 @@
-// app/api/vendors/[vendorId]/products/route.ts - Updated without cost and tags
+// app/api/vendors/[vendorId]/products/route.ts (ADMIN PROJECT)
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs";
 import { connectToDB } from "@/lib/mongoDB";
 import Product from "@/lib/models/Product";
 import Collection from "@/lib/models/Collection";
 import Vendor from "@/lib/models/Vendor";
-import Role from "@/lib/models/Role";
+import { auth } from "@clerk/nextjs";
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { vendorId: string } }
+) {
+  try {
+    const { userId } = auth();
+    
+    if (!userId) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    await connectToDB();
+
+    console.log(`GET products for vendor: ${params.vendorId}, requested by user: ${userId}`);
+
+    // Verify vendor exists
+    const vendor = await Vendor.findById(params.vendorId);
+    if (!vendor) {
+      console.log(`Vendor not found: ${params.vendorId}`);
+      return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
+    }
+
+    // Get vendor products
+    const products = await Product.find({ 
+      vendor: params.vendorId
+    })
+      .populate({ path: "collections", model: Collection })
+      .populate({ path: "vendor", model: Vendor, select: "businessName" })
+      .sort({ createdAt: "desc" });
+
+    console.log(`Found ${products.length} products for vendor ${params.vendorId}`);
+
+    return NextResponse.json(products, { status: 200 });
+  } catch (error) {
+    console.error("Error fetching vendor products:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch vendor products" },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { vendorId: string } }
 ) {
-  console.log("--- PRODUCT POST REQUEST START ---");
-  console.log("Vendor ID:", params.vendorId);
-  
   try {
     const { userId } = auth();
-    console.log("User ID from auth:", userId);
     
     if (!userId) {
-      console.log("Unauthorized: No user ID");
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    console.log("Connecting to DB...");
     await connectToDB();
 
-    // Get vendor
-    console.log("Fetching vendor with ID:", params.vendorId);
+    console.log(`--- PRODUCT POST REQUEST START ---`);
+    console.log(`Creating product for vendor: ${params.vendorId}`);
+
+    const {
+      title,
+      description,
+      media,
+      collections,
+      sizes,
+      colors,
+      price,
+      expense,
+      stockQuantity = 0
+    } = await req.json();
+
+    if (!title || !description || !media || !price) {
+      return new NextResponse("Not enough data to create a product", {
+        status: 400,
+      });
+    }
+
+    // Verify vendor exists
     const vendor = await Vendor.findById(params.vendorId);
-    
     if (!vendor) {
-      console.log("Vendor not found with ID:", params.vendorId);
       return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
     }
-    console.log("Vendor found:", vendor.businessName);
 
-    // Check permissions
-    console.log("Checking user permissions...");
-    const userRole = await Role.findOne({ clerkId: userId });
-    console.log("User role:", userRole?.role);
-    
-    const isAdmin = userRole?.role === "admin";
-    const isVendorOwner = vendor.clerkId === userId;
-    
-    console.log("Is admin:", isAdmin);
-    console.log("Vendor clerkId:", vendor.clerkId);
-    console.log("User clerkId:", userId);
-    console.log("Is vendor owner:", isVendorOwner);
-
-    // Always allow admin users or the vendor owner
-    if (!isAdmin && !isVendorOwner) {
-      console.log("Permission denied: User is not admin and not the vendor owner");
-      return NextResponse.json({ 
-        error: "You don't have permission to create products for this vendor" 
-      }, { status: 403 });
-    }
-    
-    console.log("Permission check passed!");
-
-    console.log("Parsing request body...");
-    const productData = await req.json();
-    console.log("Product data received:", JSON.stringify(productData, null, 2));
-
-    // Validate required fields (removed category from validation)
-    if (!productData.title || !productData.media || productData.media.length === 0 || !productData.price) {
-      console.log("Validation error: Missing required fields");
-      return NextResponse.json(
-        { error: "Title, media, and price are required" },
-        { status: 400 }
-      );
-    }
-
-    console.log("Creating product for vendor:", params.vendorId);
-    
-    // Create new product (removed category)
     const newProduct = await Product.create({
-      title: productData.title,
-      description: productData.description,
-      media: productData.media,
-      collections: productData.collections,
-      sizes: productData.sizes,
-      colors: productData.colors,
-      price: productData.price,
+      title,
+      description,
+      media,
+      collections: collections || [],
+      sizes: sizes || [],
+      colors: colors || [],
+      price,
+      expense: expense || 0,
       vendor: params.vendorId,
+      isApproved: true, // Auto-approve for now
+      stockQuantity
     });
 
-    await newProduct.save();
-    console.log("Product created with ID:", newProduct._id);
+    console.log(`Product created with ID: ${newProduct._id}`);
 
-    // Update collections if provided
-    if (productData.collections && Array.isArray(productData.collections)) {
-      console.log("Updating collections with the new product");
-      for (const collectionId of productData.collections) {
+    // Update collections with the new product
+    if (collections && collections.length > 0) {
+      console.log(`Updating collections with the new product`);
+      for (const collectionId of collections) {
         const collection = await Collection.findById(collectionId);
-        if (collection && collection.vendor.toString() === params.vendorId) {
+        if (collection) {
           collection.products.push(newProduct._id);
           await collection.save();
           console.log(`Added product to collection: ${collectionId}`);
-        } else {
-          console.log(`Collection not found or doesn't belong to this vendor: ${collectionId}`);
         }
       }
     }
 
-    // Add populated collections for the response
-    const populatedProduct = await Product.findById(newProduct._id).populate({
-      path: "collections",
-      model: Collection,
-      select: "title _id"
-    });
+    console.log(`Product created successfully: ${newProduct._id}`);
+    console.log(`--- PRODUCT POST REQUEST END ---`);
 
-    console.log("Product created successfully:", newProduct._id);
-    console.log("--- PRODUCT POST REQUEST END ---");
-    
-    return NextResponse.json(populatedProduct, { status: 201 });
-  } catch (error: any) {
-    console.error("Error creating vendor product:", error);
-    console.log("Error message:", error.message);
-    console.log("Error stack:", error.stack);
-    console.log("--- PRODUCT POST REQUEST END WITH ERROR ---");
-    
-    return NextResponse.json(
-      { error: `Failed to create vendor product: ${error.message}` },
-      { status: 500 }
-    );
+    return NextResponse.json(newProduct, { status: 201 });
+  } catch (error) {
+    console.error("[vendor_products_POST]", error);
+    return new NextResponse("Internal Error", { status: 500 });
   }
 }

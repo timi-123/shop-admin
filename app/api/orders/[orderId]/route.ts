@@ -1,29 +1,56 @@
-import Customer from "@/lib/models/Customer";
+import { NextRequest, NextResponse } from "next/server";
+import { connectToDB } from "@/lib/mongoDB";
 import Order from "@/lib/models/Order";
 import Product from "@/lib/models/Product";
-import { connectToDB } from "@/lib/mongoDB";
-import { NextRequest, NextResponse } from "next/server";
+import Vendor from "@/lib/models/Vendor";
 
-export const GET = async (req: NextRequest, { params }: { params: { orderId: String }}) => {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { orderId: string } }
+) {
   try {
-    await connectToDB()
+    await connectToDB();
 
-    const orderDetails = await Order.findById(params.orderId).populate({
-      path: "products.product",
-      model: Product
-    })
+    const order = await Order.findById(params.orderId)
+      .populate({
+        path: "products.product",
+        model: Product,
+        select: "title media price"
+      })
+      .populate({
+        path: "vendorOrders.vendor",
+        model: Vendor,
+        select: "businessName email"
+      });
 
-    if (!orderDetails) {
-      return new NextResponse(JSON.stringify({ message: "Order Not Found" }), { status: 404 })
+    if (!order) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    const customer = await Customer.findOne({ clerkId: orderDetails.customerClerkId})
-
-    return NextResponse.json({ orderDetails, customer }, { status: 200 })
-  } catch (err) {
-    console.log("[orderId_GET]", err)
-    return new NextResponse("Internal Server Error", { status: 500 })
+    return NextResponse.json(order, { 
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": `${process.env.ECOMMERCE_STORE_URL || 'http://localhost:3001'}`,
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching order:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch order" },
+      { status: 500 }
+    );
   }
 }
 
-export const dynamic = "force-dynamic";
+export const OPTIONS = async () => {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": `${process.env.ECOMMERCE_STORE_URL || 'http://localhost:3001'}`,
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+};
