@@ -123,6 +123,16 @@ export async function POST(
       );
     }
 
+    // Check for duplicate collection title for this vendor only
+    const existingCollection = await Collection.findOne({ 
+      title: collectionData.title, 
+      vendor: params.vendorId 
+    });
+    if (existingCollection) {
+      console.log("Duplicate collection title for this vendor");
+      return NextResponse.json({ error: "You cannot create collection, you already have collection with this name." }, { status: 400 });
+    }
+
     console.log("Creating collection for vendor:", params.vendorId);
     
     // Create new collection

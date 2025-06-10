@@ -8,6 +8,7 @@ import {
   Store,
   FileText,
   MessageSquare,
+  Instagram,
 } from "lucide-react";
 
 export const getNavLinks = (role: string | null, vendorId?: string) => {
@@ -48,11 +49,16 @@ export const getNavLinks = (role: string | null, vendorId?: string) => {
         icon: <ShoppingBag />,
         label: "Orders",
       },
+      {
+        url: "/my-social-feed",
+        icon: <Instagram />,
+        label: "Social Feed",
+      },
     ];
   }
 
   // Admin main navigation - vendors, appeals, and pending approvals
-  if (role === "admin") {
+  if (role === "admin" || role === "superadmin") {
     return [
       ...baseLinks,
       {
@@ -64,6 +70,11 @@ export const getNavLinks = (role: string | null, vendorId?: string) => {
         url: "/appeals",
         icon: <MessageSquare />,
         label: "Appeals",
+      },
+      {
+        url: "/my-social-feed",
+        icon: <Instagram />,
+        label: "Social Feed",
       },
     ];
   }
@@ -86,6 +97,11 @@ export const getNavLinks = (role: string | null, vendorId?: string) => {
         url: "/my-orders",
         icon: <ShoppingBag />,
         label: "My Orders",
+      },
+      {
+        url: "/my-social-feed",
+        icon: <Instagram />,
+        label: "Social Feed",
       },
     ];
   }

@@ -5,6 +5,7 @@ import Product from "@/lib/models/Product";
 import Collection from "@/lib/models/Collection";
 import Vendor from "@/lib/models/Vendor";
 import { auth } from "@clerk/nextjs";
+import { createDemoSocialPosts } from "@/lib/utils/socialPost";
 
 export async function GET(
   req: NextRequest,
@@ -101,6 +102,9 @@ export async function POST(
       isApproved: true, // Auto-approve for now
       stockQuantity
     });
+
+    // Generate demo social posts for Instagram and Facebook
+    await createDemoSocialPosts(newProduct, vendor);
 
     console.log(`Product created with ID: ${newProduct._id}`);
 

@@ -42,6 +42,11 @@ const ProductSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 }, { toJSON: { getters: true } });
 
+// Clear cached model to ensure schema updates
+if (mongoose.models.Product) {
+  delete mongoose.models.Product;
+}
+
 const Product = mongoose.models.Product || mongoose.model("Product", ProductSchema);
 
 export default Product;
