@@ -1,7 +1,7 @@
 // app/api/vendors/[vendorId]/orders/[orderId]/status/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDB } from "@/lib/mongoDB";
-import Order from "@/lib/models/Order";
+import OrderModel from "@/lib/models/Order"; // Use OrderModel if you renamed it
 import Vendor from "@/lib/models/Vendor";
 import { auth } from "@clerk/nextjs";
 
@@ -54,7 +54,7 @@ export async function PATCH(
     }
 
     // Find and update the order
-    const order = await Order.findById(params.orderId);
+    const order = await OrderModel.findById(params.orderId);
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
@@ -109,58 +109,6 @@ export async function PATCH(
     console.error("Error updating order status:", error);
     return NextResponse.json(
       { error: "Failed to update order status" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { vendorId: string; orderId: string } }
-) {
-  try {
-    const { userId } = auth();
-    
-    if (!userId) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    await connectToDB();
-
-    // Find the order and get status history
-    const order = await Order.findById(params.orderId)
-      .populate({
-        path: "vendorOrders.vendor",
-        model: Vendor,
-        select: "businessName"
-      });
-
-    if (!order) {
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
-    }
-
-    const vendorOrder = order.vendorOrders.find(
-      (vo: any) => vo.vendor._id.toString() === params.vendorId
-    );
-
-    if (!vendorOrder) {
-      return NextResponse.json({ 
-        error: "Vendor order not found" 
-      }, { status: 404 });
-    }
-
-    return NextResponse.json({
-      currentStatus: vendorOrder.status,
-      customerMessage: vendorOrder.customerStatusMessage,
-      statusHistory: vendorOrder.statusHistory,
-      trackingInfo: vendorOrder.trackingInfo,
-      lastUpdate: vendorOrder.lastStatusUpdate
-    }, { status: 200 });
-
-  } catch (error) {
-    console.error("Error fetching order status:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch order status" },
       { status: 500 }
     );
   }
