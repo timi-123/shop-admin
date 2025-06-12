@@ -1,4 +1,4 @@
-// lib/constants.tsx (Updated)
+// lib/constants.tsx (IMPROVED)
 import {
   LayoutDashboard,
   Shapes,

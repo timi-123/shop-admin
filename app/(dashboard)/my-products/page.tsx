@@ -1,7 +1,7 @@
-// app/(dashboard)/my-products/page.tsx
+// app/(dashboard)/my-products/page.tsx (FIXED - Using Cache Service)
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { useRole } from "@/lib/hooks/useRole";
@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import Loader from "@/components/custom ui/Loader";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { vendorCache } from "@/lib/services/vendorCache";
 
 const MyProductsPage = () => {
   const router = useRouter();
@@ -21,24 +22,33 @@ const MyProductsPage = () => {
   const [loading, setLoading] = useState(true);
   const [vendor, setVendor] = useState<VendorType | null>(null);
   const [products, setProducts] = useState<ProductType[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const fetchingRef = useRef(false);
 
   useEffect(() => {
     const fetchData = async () => {
+      // Prevent duplicate requests
+      if (fetchingRef.current) {
+        console.log("Products fetch already in progress, skipping");
+        return;
+      }
+
       try {
         if (!user || !isVendor) {
-          router.push("/");
+          console.log("User not authenticated or not a vendor, staying on page...");
+          setLoading(false);
           return;
         }
 
+        fetchingRef.current = true;
         setLoading(true);
+        setError(null);
         
-        // First get vendor info
-        const vendorRes = await fetch("/api/vendors/my-vendor");
-        if (!vendorRes.ok) {
-          throw new Error("Failed to fetch vendor info");
-        }
+        console.log("Fetching vendor info using cache service...");
         
-        const vendorData = await vendorRes.json();
+        // Use cache service for vendor data
+        const vendorData = await vendorCache.getVendor(user.id);
+        console.log("Vendor data received:", vendorData);
         setVendor(vendorData);
         
         // Store vendor ID for easy access across components
@@ -46,40 +56,77 @@ const MyProductsPage = () => {
           localStorage.setItem('vendorId', vendorData._id);
         }
         
-        // Then get products for this vendor
-        const productsRes = await fetch(`/api/vendors/${vendorData._id}/products`);
-        if (!productsRes.ok) {
-          throw new Error("Failed to fetch products");
-        }
+        console.log("Fetching products using cache service...");
         
-        const productsData = await productsRes.json();
+        // Use cache service for products data
+        const productsData = await vendorCache.getVendorData(user.id, vendorData._id, 'products');
+        console.log("Products data received:", productsData);
         setProducts(productsData);
-      } catch (error) {
+        
+      } catch (error: any) {
         console.error("Error fetching products:", error);
+        setError(error.message || "Failed to load products");
+        toast.error(error.message || "Failed to load products");
       } finally {
         setLoading(false);
+        fetchingRef.current = false;
       }
     };
 
+    // Only fetch if user and role are loaded
     if (user && isVendor) {
       fetchData();
+    } else if (user && role && role !== "vendor") {
+      setLoading(false);
     }
-  }, [user, isVendor, router]);
 
+    // Cleanup
+    return () => {
+      fetchingRef.current = false;
+    };
+  }, [user?.id, isVendor]);
+
+  // Show early return for access control
   if (!user || !isVendor) {
     return (
       <div className="px-10 py-5">
         <p className="text-heading2-bold">Access Denied</p>
         <p className="text-grey-1 mt-5">Only vendors can access this page.</p>
+        <button
+          onClick={() => router.push("/")}
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+        >
+          Go to Dashboard
+        </button>
       </div>
     );
   }
 
   if (loading) return <Loader />;
 
+  if (error) {
+    return (
+      <div className="px-10 py-5">
+        <p className="text-heading2-bold text-red-600">Error</p>
+        <p className="text-grey-1 mt-5">{error}</p>
+        <button
+          onClick={() => {
+            // Clear cache and retry
+            vendorCache.clearCache(user.id);
+            window.location.reload();
+          }}
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   const handleCreateProduct = () => {
     const vendorId = vendor?._id || localStorage.getItem('vendorId');
     if (vendorId) {
+      console.log("Navigating to create product for vendor:", vendorId);
       router.push(`/vendors/${vendorId}/products/new`);
     } else {
       toast.error("Vendor information not available. Please refresh the page.");
@@ -107,10 +154,28 @@ const MyProductsPage = () => {
           </Button>
         )}
       </div>
-      <Separator className="bg-grey-1 my-4" />
+      <Separator className="bg-grey-1 my-5"/>
       
       {products.length === 0 ? (
-        <p className="text-grey-1">You don't have any products yet.</p>
+        <div className="text-center py-10">
+          <p className="text-grey-1 mb-4">You don't have any products yet.</p>
+          {vendor ? (
+            <Link href={`/vendors/${vendor._id}/products/new`}>
+              <Button className="bg-blue-1 text-white">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Your First Product
+              </Button>
+            </Link>
+          ) : (
+            <Button 
+              onClick={handleCreateProduct}
+              className="bg-blue-1 text-white"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create Your First Product
+            </Button>
+          )}
+        </div>
       ) : (
         <DataTable columns={columns} data={products} searchKey="title" />
       )}

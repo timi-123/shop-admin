@@ -1,4 +1,4 @@
-// middleware.ts (UPDATED)
+// middleware.ts (IMPROVED)
 import { authMiddleware } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -6,7 +6,7 @@ export default authMiddleware({
   publicRoutes: [
     "/api/checkout",
     "/api/products",
-    "/api/collections",
+    "/api/collections", 
     "/api/search",
     "/api/webhooks",
     "/api/vendors/public",
@@ -42,14 +42,20 @@ export default authMiddleware({
       return response;
     }
 
-    // Always allow root path, sign-in, sign-up, and vendor application pages
-    if (pathname === '/' || pathname.startsWith('/sign-in') || pathname.startsWith('/sign-up') || pathname.startsWith('/vendor-application')) {
+    // Always allow these paths
+    const publicPaths = ['/', '/sign-in', '/sign-up', '/vendor-application'];
+    if (publicPaths.includes(pathname)) {
       return NextResponse.next();
     }
 
-    // For all other protected routes, require authentication
-    if (!auth.userId) {
-      return NextResponse.redirect(new URL('/sign-in', req.url));
+    // For all other dashboard routes, require authentication
+    if (pathname.startsWith('/(dashboard)') || 
+        pathname.startsWith('/vendors') || 
+        pathname.startsWith('/my-') ||
+        pathname.startsWith('/appeals')) {
+      if (!auth.userId) {
+        return NextResponse.redirect(new URL('/sign-in', req.url));
+      }
     }
 
     // For authenticated users, let them through

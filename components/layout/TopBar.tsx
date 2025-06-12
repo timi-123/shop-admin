@@ -1,11 +1,11 @@
-// components/layout/TopBar.tsx (UPDATED)
+// components/layout/TopBar.tsx (FIXED)
 "use client"
 
 import { UserButton, useUser } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useParams } from "next/navigation";
 import { Menu } from "lucide-react";
 import { useRole } from "@/lib/hooks/useRole";
 import { getNavLinks } from "@/lib/constants";
@@ -13,9 +13,13 @@ import { getNavLinks } from "@/lib/constants";
 const TopBar = () => {
   const [dropdownMenu, setDropdownMenu] = useState(false);
   const pathname = usePathname();
+  const params = useParams();
   const { role } = useRole();
   const { user } = useUser();
-  const navLinks = getNavLinks(role);
+  
+  // Get vendorId from URL params if admin is viewing a specific vendor (FIXED)
+  const vendorId = params.vendorId as string;
+  const navLinks = getNavLinks(role, vendorId);
 
   // Store userId in localStorage when user is loaded
   useEffect(() => {
@@ -33,7 +37,12 @@ const TopBar = () => {
           <Link
             href={link.url}
             key={link.label}
-            className={`flex gap-4 text-body-medium ${pathname === link.url ? "text-blue-1" : "text-grey-1"}`}
+            className={`flex gap-4 text-body-medium ${
+              pathname === link.url || 
+              (pathname?.includes(link.url) && link.url !== '/') 
+                ? "text-blue-1" 
+                : "text-grey-1"
+            }`}
           >
             <p>{link.label}</p>
           </Link>
@@ -52,6 +61,7 @@ const TopBar = () => {
                 href={link.url}
                 key={link.label}
                 className="flex gap-4 text-body-medium"
+                onClick={() => setDropdownMenu(false)}
               >
                 {link.icon} <p>{link.label}</p>
               </Link>

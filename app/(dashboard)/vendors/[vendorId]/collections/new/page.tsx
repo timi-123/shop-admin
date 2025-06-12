@@ -1,4 +1,4 @@
-// app/(dashboard)/vendors/[vendorId]/collections/new/page.tsx
+// app/(dashboard)/vendors/[vendorId]/collections/new/page.tsx (IMPROVED)
 "use client";
 
 import { useEffect, useState } from "react";
@@ -16,6 +16,7 @@ const NewVendorCollectionPage = () => {
   const [loading, setLoading] = useState(true);
   const [vendor, setVendor] = useState<VendorType | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hasPermission, setHasPermission] = useState(false);
 
   useEffect(() => {
     const checkPermissions = async () => {
@@ -24,6 +25,12 @@ const NewVendorCollectionPage = () => {
         
         setLoading(true);
         setError(null);
+        
+        // Redirect if not authenticated
+        if (!user) {
+          router.replace("/sign-in");
+          return;
+        }
         
         // Make sure we have a vendorId
         if (!params.vendorId) {
@@ -40,10 +47,21 @@ const NewVendorCollectionPage = () => {
         });
         
         // Fetch vendor details to verify it exists
-        const vendorRes = await fetch(`/api/vendors/${params.vendorId}`);
+        const vendorRes = await fetch(`/api/vendors/${params.vendorId}`, {
+          cache: 'no-store'
+        });
+        
         if (!vendorRes.ok) {
-          const errorData = await vendorRes.json();
-          throw new Error(errorData.error || "Failed to fetch vendor");
+          if (vendorRes.status === 404) {
+            setError("Vendor not found");
+          } else if (vendorRes.status === 403) {
+            setError("You don't have permission to access this vendor");
+          } else {
+            const errorData = await vendorRes.json();
+            setError(errorData.error || "Failed to fetch vendor");
+          }
+          setLoading(false);
+          return;
         }
         
         const vendorData = await vendorRes.json();
@@ -53,6 +71,7 @@ const NewVendorCollectionPage = () => {
         // For admin users, always allow
         if (isAdmin) {
           console.log("User is an admin - permission granted");
+          setHasPermission(true);
           setLoading(false);
           return;
         }
@@ -68,6 +87,7 @@ const NewVendorCollectionPage = () => {
           
           if (isVendorOwner) {
             console.log("User is the vendor owner - permission granted");
+            setHasPermission(true);
             setLoading(false);
             return;
           }
@@ -80,34 +100,44 @@ const NewVendorCollectionPage = () => {
         
       } catch (error: any) {
         console.error("Error checking permissions:", error);
-        setError(error.message || "An error occurred");
+        setError(error.message || "An error occurred while checking permissions");
         setLoading(false);
       }
     };
 
     checkPermissions();
-  }, [params.vendorId, isLoaded, roleLoading, isAdmin, isVendor, user?.id]);
+  }, [params.vendorId, isLoaded, roleLoading, isAdmin, isVendor, user?.id, router]);
 
-  // Fix for when the user is not loaded yet or role is not determined
-  if (!isLoaded || roleLoading) return <Loader />;
+  // Show loader while checking permissions
+  if (!isLoaded || roleLoading || loading) {
+    return <Loader />;
+  }
   
-  if (loading) return <Loader />;
-  
+  // Show error if there's an issue
   if (error) {
     return (
       <div className="px-10 py-5">
-        <p className="text-heading2-bold">Error</p>
+        <p className="text-heading2-bold text-red-600">Error</p>
         <p className="text-grey-1 mt-5">{error}</p>
-        <button 
-          onClick={() => router.push(`/vendors/${params.vendorId}`)}
-          className="mt-4 px-4 py-2 bg-blue-1 text-white rounded"
-        >
-          Back to Vendor
-        </button>
+        <div className="mt-6 space-x-4">
+          <button 
+            onClick={() => router.back()}
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+          >
+            Go Back
+          </button>
+          <button 
+            onClick={() => router.push("/")}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            Go to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
   
+  // Show vendor not found
   if (!vendor) {
     return (
       <div className="px-10 py-5">
@@ -115,9 +145,25 @@ const NewVendorCollectionPage = () => {
         <p className="text-grey-1 mt-5">The vendor you're looking for doesn't exist or has been removed.</p>
         <button 
           onClick={() => router.push('/vendors')}
-          className="mt-4 px-4 py-2 bg-blue-1 text-white rounded"
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
         >
           Back to Vendors
+        </button>
+      </div>
+    );
+  }
+
+  // Show permission denied
+  if (!hasPermission) {
+    return (
+      <div className="px-10 py-5">
+        <p className="text-heading2-bold text-red-600">Access Denied</p>
+        <p className="text-grey-1 mt-5">You don't have permission to create collections for this vendor.</p>
+        <button 
+          onClick={() => router.push("/")}
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+        >
+          Go to Dashboard
         </button>
       </div>
     );
