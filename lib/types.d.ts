@@ -1,4 +1,5 @@
-// lib/types.d.ts - BOTH ADMIN & STORE
+// lib/types.d.ts - Enhanced with vendor status tracking
+
 type VendorType = {
   _id: string;
   clerkId: string;
@@ -39,7 +40,7 @@ type VendorType = {
   suspendedReason?: string;
   createdAt: Date;
   updatedAt: Date;
-}
+};
 
 type CollectionType = {
   _id: string;
@@ -51,7 +52,7 @@ type CollectionType = {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
-}
+};
 
 type ProductType = {
   _id: string;
@@ -68,10 +69,10 @@ type ProductType = {
   cost?: number;
   vendor: string | VendorType;
   isApproved: boolean;
-  stockQuantity: number; // Enhanced: Always include stock quantity
+  stockQuantity: number;
   createdAt: string | Date;
   updatedAt: string | Date;
-}
+};
 
 type OrderColumnType = {
   _id: string;
@@ -81,7 +82,7 @@ type OrderColumnType = {
   createdAt: string;
   vendor?: string;
   status: string;
-}
+};
 
 type OrderItemType = {
   product: ProductType;
@@ -90,7 +91,23 @@ type OrderItemType = {
   size: string;
   quantity: number;
   priceAtTime: number;
-}
+};
+
+// Enhanced vendor order tracking
+type VendorOrderStatusType = "order_received" | "in_production" | "ready_to_ship" | "shipped" | "delivered" | "cancelled";
+
+type StatusHistoryType = {
+  status: VendorOrderStatusType;
+  updatedAt: Date;
+  updatedBy: string;
+  customerMessage: string;
+};
+
+type TrackingInfoType = {
+  trackingNumber?: string;
+  carrier?: string;
+  estimatedDelivery?: Date;
+};
 
 type VendorOrderType = {
   vendor: string | VendorType;
@@ -98,8 +115,12 @@ type VendorOrderType = {
   subtotal: number;
   commission: number;
   vendorEarnings: number;
-  status: string;
-}
+  status: VendorOrderStatusType;
+  customerStatusMessage: string;
+  statusHistory: StatusHistoryType[];
+  trackingInfo?: TrackingInfoType;
+  lastStatusUpdate: Date;
+};
 
 type OrderType = {
   shippingAddress: {
@@ -119,15 +140,33 @@ type OrderType = {
   status: string;
   paymentStatus: string;
   createdAt: Date;
-}
+  updatedAt: Date;
+};
+
+// Enhanced customer order tracking types
+type CustomerOrderType = OrderType & {
+  customerStatusSummary: string;
+  vendorStatusBreakdown: {
+    vendorName: string;
+    status: VendorOrderStatusType;
+    customerMessage: string;
+    lastUpdate: string;
+    trackingInfo?: TrackingInfoType;
+    products: OrderItemType[];
+    productCount: number;
+  }[];
+  hasShippedItems: boolean;
+  hasDeliveredItems: boolean;
+  allItemsDelivered: boolean;
+  latestStatusUpdate: number;
+};
 
 type CustomerType = {
   clerkId: string;
   name: string;
   email: string;
-}
+};
 
-// Enhanced: Stock management types
 type StockUpdateType = {
   productId: string;
   action: "increase" | "decrease" | "set";
@@ -136,7 +175,7 @@ type StockUpdateType = {
   newStock: number;
   updatedBy?: string;
   timestamp: Date;
-}
+};
 
 type StockValidationResult = {
   productId: string;
@@ -145,46 +184,20 @@ type StockValidationResult = {
   requestedQuantity: number;
   isValid: boolean;
   message?: string;
-}
+};
 
 type CartItemType = {
   item: ProductType;
   quantity: number;
   color?: string;
   size?: string;
-}
+};
 
-// Enhanced: Stock status types
-type StockStatus = "in-stock" | "low-stock" | "out-of-stock" | "insufficient";
-
-type StockInfo = {
-  status: StockStatus;
-  message: string;
-  color: string;
-  quantity: number;
-}
-
-// Enhanced: API response types for stock operations
-type StockUpdateResponse = {
-  success: boolean;
-  product: ProductType;
-  previousStock: number;
-  newStock: number;
-  action: string;
-  quantity: number;
-}
-
-type StockValidationResponse = {
-  productId: string;
-  title: string;
-  stockQuantity: number;
-  isAvailable: boolean;
-  lastUpdated: string;
-  error?: string;
-}
-
-type BatchStockValidationResponse = {
-  results: StockValidationResponse[];
-  totalProducts: number;
-  availableProducts: number;
-}
+// Vendor status update request type
+type VendorStatusUpdateType = {
+  status: VendorOrderStatusType;
+  trackingNumber?: string;
+  carrier?: string;
+  estimatedDelivery?: string;
+  customMessage?: string;
+};
