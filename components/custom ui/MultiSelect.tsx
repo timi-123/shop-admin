@@ -1,4 +1,4 @@
-// components/custom ui/MultiSelect.tsx - Cleaner Fixed version
+// components/custom ui/MultiSelect.tsx - Fixed version with better error handling
 "use client";
 
 import { useState } from "react";
@@ -15,27 +15,31 @@ interface MultiSelectProps {
 
 const MultiSelect: React.FC<MultiSelectProps> = ({
   placeholder,
-  collections,
-  value,
+  collections = [], // Provide default empty array
+  value = [], // Provide default empty array
   onChange,
   onRemove,
 }) => {
   const [inputValue, setInputValue] = useState("");
   const [open, setOpen] = useState(false);
 
-  let selected: CollectionType[];
+  // Ensure collections and value are always arrays
+  const safeCollections = Array.isArray(collections) ? collections : [];
+  const safeValue = Array.isArray(value) ? value : [];
 
-  if (value.length === 0) {
+  let selected: CollectionType[] = [];
+
+  if (safeValue.length === 0) {
     selected = [];
   } else {
-    selected = value.map((id) =>
-      collections.find((collection) => collection._id === id)
+    selected = safeValue.map((id) =>
+      safeCollections.find((collection) => collection._id === id)
     ).filter(Boolean) as CollectionType[];
   }
 
-  const selectables = collections.filter((collection) => 
+  const selectables = safeCollections.filter((collection) => 
     !selected.some(s => s._id === collection._id) &&
-    collection.title.toLowerCase().includes(inputValue.toLowerCase())
+    collection.title?.toLowerCase().includes(inputValue.toLowerCase())
   ); 
 
   return (

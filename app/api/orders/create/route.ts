@@ -1,3 +1,4 @@
+// app/api/orders/create/route.ts - ADMIN
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDB } from "@/lib/mongoDB";
 import Order from "@/lib/models/Order";
@@ -18,6 +19,46 @@ export async function POST(req: NextRequest) {
       totalAmount 
     } = await req.json();
 
+    // Validate stock availability before processing order
+    const stockValidationResults = [];
+    const productsToUpdate = [];
+
+    for (const cartItem of cartItems) {
+      const product = await Product.findById(cartItem.item._id).populate('vendor');
+      
+      if (!product) {
+        return new NextResponse(
+          JSON.stringify({ error: `Product ${cartItem.item.title} not found` }), 
+          { status: 400 }
+        );
+      }
+
+      // Check stock availability
+      const currentStock = product.stockQuantity || 0;
+      const requestedQuantity = cartItem.quantity;
+
+      if (currentStock < requestedQuantity) {
+        return new NextResponse(
+          JSON.stringify({ 
+            error: `Insufficient stock for ${product.title}. Available: ${currentStock}, Requested: ${requestedQuantity}` 
+          }), 
+          { status: 400 }
+        );
+      }
+
+      stockValidationResults.push({
+        productId: product._id,
+        currentStock,
+        requestedQuantity,
+        newStock: currentStock - requestedQuantity
+      });
+
+      productsToUpdate.push({
+        productId: product._id,
+        newStock: currentStock - requestedQuantity
+      });
+    }
+
     // Create or update customer record
     let customer = await Customer.findOne({ clerkId: customerClerkId });
     if (!customer) {
@@ -29,7 +70,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Process cart items and group by vendor - NO MAPS
+    // Process cart items and group by vendor
     const vendorOrders: any[] = [];
     const orderProducts: any[] = [];
     const vendorUpdates: { vendorId: string; earnings: number }[] = [];
@@ -51,17 +92,11 @@ export async function POST(req: NextRequest) {
 
       orderProducts.push(orderItem);
 
-      // Find existing vendor order or create new one
-      let existingVendorOrder = null;
-      for (let i = 0; i < vendorOrders.length; i++) {
-        if (vendorOrders[i].vendor === vendorId) {
-          existingVendorOrder = vendorOrders[i];
-          break;
-        }
-      }
-
-      if (!existingVendorOrder) {
-        existingVendorOrder = {
+      // Find or create vendor order
+      let vendorOrder = vendorOrders.find(vo => vo.vendor.toString() === vendorId);
+      
+      if (!vendorOrder) {
+        vendorOrder = {
           vendor: vendorId,
           products: [],
           subtotal: 0,
@@ -69,11 +104,10 @@ export async function POST(req: NextRequest) {
           vendorEarnings: 0,
           status: "pending"
         };
-        vendorOrders.push(existingVendorOrder);
+        vendorOrders.push(vendorOrder);
       }
 
-      // Add product to vendor order
-      existingVendorOrder.products.push({
+      vendorOrder.products.push({
         product: product._id,
         color: cartItem.color,
         size: cartItem.size,
@@ -82,72 +116,80 @@ export async function POST(req: NextRequest) {
       });
 
       const itemTotal = product.price * cartItem.quantity;
-      existingVendorOrder.subtotal += itemTotal;
-      
+      vendorOrder.subtotal += itemTotal;
+
       // Calculate commission (10% platform fee)
       const commissionRate = 0.10;
-      existingVendorOrder.commission += itemTotal * commissionRate;
-      existingVendorOrder.vendorEarnings += itemTotal * (1 - commissionRate);
+      const commission = itemTotal * commissionRate;
+      vendorOrder.commission += commission;
+      vendorOrder.vendorEarnings += (itemTotal - commission);
+
+      // Track vendor earnings for updates
+      let vendorUpdate = vendorUpdates.find(vu => vu.vendorId === vendorId);
+      if (!vendorUpdate) {
+        vendorUpdate = { vendorId, earnings: 0 };
+        vendorUpdates.push(vendorUpdate);
+      }
+      vendorUpdate.earnings += (itemTotal - commission);
     }
+
+    // Calculate platform fee (total commission)
+    const platformFee = vendorOrders.reduce((total, vo) => total + vo.commission, 0);
 
     // Create the order
     const newOrder = await Order.create({
       customerClerkId,
       products: orderProducts,
-      vendorOrders: vendorOrders,
-      shippingAddress: {
-        street: shippingDetails.address.street,
-        city: shippingDetails.address.city,
-        state: shippingDetails.address.state,
-        postalCode: shippingDetails.address.postalCode,
-        country: shippingDetails.address.country
-      },
+      vendorOrders,
+      shippingAddress: shippingDetails.address,
+      shippingRate: "standard",
       totalAmount,
-      platformFee: totalAmount * 0.10,
+      platformFee,
       status: "pending",
-      paymentStatus: "pending",
+      paymentStatus: "paid", // Assuming payment is already processed
       createdAt: new Date()
     });
 
-    // Update customer's orders
+    // Update customer orders
     customer.orders.push(newOrder._id);
     await customer.save();
 
-    // Update vendor revenue - simple loop
-    for (let i = 0; i < vendorOrders.length; i++) {
-      const vendorOrder = vendorOrders[i];
-      await Vendor.findByIdAndUpdate(vendorOrder.vendor, {
-        $inc: { 
-          totalRevenue: vendorOrder.vendorEarnings,
-          totalOrders: 1
+    // Update product stock quantities
+    for (const update of productsToUpdate) {
+      await Product.findByIdAndUpdate(
+        update.productId,
+        { 
+          stockQuantity: update.newStock,
+          updatedAt: new Date()
         }
-      });
+      );
     }
 
-    return NextResponse.json(newOrder, { 
-      status: 201,
-      headers: {
-        "Access-Control-Allow-Origin": `${process.env.ECOMMERCE_STORE_URL || 'http://localhost:3001'}`,
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      }
-    });
+    // Populate the order for response
+    const populatedOrder = await Order.findById(newOrder._id)
+      .populate({
+        path: "products.product",
+        model: Product,
+        select: "title media price stockQuantity"
+      })
+      .populate({
+        path: "vendorOrders.vendor",
+        model: Vendor,
+        select: "businessName email"
+      });
+
+    return NextResponse.json({
+      success: true,
+      order: populatedOrder,
+      stockUpdates: stockValidationResults,
+      message: "Order created successfully and stock updated"
+    }, { status: 201 });
+
   } catch (error) {
-    console.error("Error creating order:", error);
-    return NextResponse.json(
-      { error: "Failed to create order" },
+    console.error("[ORDER_CREATE]", error);
+    return new NextResponse(
+      JSON.stringify({ error: "Failed to create order" }), 
       { status: 500 }
     );
   }
 }
-
-export const OPTIONS = async () => {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      "Access-Control-Allow-Origin": `${process.env.ECOMMERCE_STORE_URL || 'http://localhost:3001'}`,
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    },
-  });
-};

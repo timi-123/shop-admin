@@ -1,13 +1,14 @@
-// components/products/ProductForm.tsx - Updated without Cost and Tags
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 import { Separator } from "../ui/separator";
-import { Button } from "@/components/ui/button";
+import { Button } from "../ui/button";
 import {
   Form,
   FormControl,
@@ -15,99 +16,62 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+} from "../ui/form";
+import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import ImageUpload from "../custom ui/ImageUpload";
-import { useEffect, useState } from "react";
-import toast from "react-hot-toast";
-import Delete from "../custom ui/Delete";
-import MultiText from "../custom ui/MultiText";
 import MultiSelect from "../custom ui/MultiSelect";
+import MultiText from "../custom ui/MultiText";
+import Delete from "../custom ui/Delete";
 import Loader from "../custom ui/Loader";
-import { useRole } from "@/lib/hooks/useRole";
+import { Package, Plus, Minus } from "lucide-react";
 
 const formSchema = z.object({
-  title: z.string().min(2).max(100),
+  title: z.string().min(2).max(200),
   description: z.string().min(2).max(500).trim(),
-  media: z.array(z.string()).min(1, "At least one image is required"),
+  media: z.array(z.string()),
   collections: z.array(z.string()),
   sizes: z.array(z.string()),
   colors: z.array(z.string()),
   price: z.coerce.number().min(0.1),
+  stockQuantity: z.coerce.number().min(0).int(),
 });
 
 interface ProductFormProps {
   initialData?: ProductType | null;
   vendorId?: string;
+  isAdmin?: boolean;
 }
 
-const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
+const ProductForm: React.FC<ProductFormProps> = ({
+  initialData,
+  vendorId,
+  isAdmin = false,
+}) => {
   const router = useRouter();
-  const params = useParams();
-  const { isAdmin, isVendor } = useRole();
-
   const [loading, setLoading] = useState(true);
+  const [collections, setCollections] = useState<CollectionType[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [collections, setCollections] = useState<CollectionType[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Determine the vendor ID from props or params
-  const effectiveVendorId = vendorId || (params?.vendorId as string);
-
-  const getCollections = async () => {
-    try {
-      setLoading(true);
-      console.log("Fetching collections for vendor:", effectiveVendorId);
-      
-      let url;
-      if (effectiveVendorId) {
-        // Get vendor-specific collections
-        url = `/api/vendors/${effectiveVendorId}/collections`;
-      } else {
-        // Get all collections for admin
-        url = "/api/collections";
-      }
-      
-      const res = await fetch(url, {
-        method: "GET"
-      });
-      
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to fetch collections");
-      }
-      
-      const data = await res.json();
-      setCollections(data);
-    } catch (err: any) {
-      console.error("Error fetching collections:", err);
-      toast.error(err.message || "Failed to fetch collections");
-      setError(err.message || "Failed to fetch collections");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    getCollections();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveVendorId]);
+  // Determine effective vendor ID
+  const effectiveVendorId = vendorId || (typeof initialData?.vendor === 'string' ? initialData.vendor : initialData?.vendor?._id);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-            defaultValues: initialData
+    defaultValues: initialData
       ? {
-          title: initialData.title,
-          description: initialData.description,
-          media: initialData.media,
-          collections: initialData.collections.map(
+          title: initialData.title || "",
+          description: initialData.description || "",
+          media: initialData.media || [],
+          collections: initialData.collections?.map(
             (collection) => collection._id
-          ),
-          sizes: initialData.sizes,
-          colors: initialData.colors,
-          price: initialData.price,
+          ) || [],
+          sizes: initialData.sizes || [],
+          colors: initialData.colors || [],
+          price: initialData.price || 0.1,
+          stockQuantity: initialData.stockQuantity || 0,
         }
       : {
           title: "",
@@ -117,6 +81,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
           sizes: [],
           colors: [],
           price: 0.1,
+          stockQuantity: 0,
         },
   });
 
@@ -128,9 +93,20 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
     }
   };
 
+  const handleStockIncrease = () => {
+    const currentStock = form.getValues("stockQuantity");
+    form.setValue("stockQuantity", currentStock + 1);
+  };
+
+  const handleStockDecrease = () => {
+    const currentStock = form.getValues("stockQuantity");
+    if (currentStock > 0) {
+      form.setValue("stockQuantity", currentStock - 1);
+    }
+  };
+
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      // Prevent multiple submissions
       if (submitting) return;
       
       setSubmitting(true);
@@ -150,10 +126,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
       let method = "POST";
       
       if (initialData) {
-        // Update existing product
         url = `/api/vendors/${effectiveVendorId}/products/${initialData._id}`;
+        method = "PUT";
       } else {
-        // Create new product
         url = `/api/vendors/${effectiveVendorId}/products`;
       }
       
@@ -170,11 +145,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
         throw new Error(errorData.error || "Failed to submit product");
       }
       
-      // Set success state
       setSubmitSuccess(true);
       toast.success(`Product ${initialData ? "updated" : "created"} successfully!`);
       
-      // Wait a moment before redirecting to ensure toast is shown
       setTimeout(() => {
         if (isAdmin) {
           router.push(`/vendors/${effectiveVendorId}/products`);
@@ -192,17 +165,35 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
     }
   };
 
-  // Handle cancel button click separately from form submission
   const handleCancel = (e: React.MouseEvent) => {
-    e.preventDefault(); // Prevent any default behavior
+    e.preventDefault();
     
-    // Navigate back
     if (isAdmin) {
       router.push(`/vendors/${effectiveVendorId}/products`);
     } else {
       router.push("/my-products");
     }
   };
+
+  useEffect(() => {
+    const getCollections = async () => {
+      try {
+        if (!effectiveVendorId) return;
+        
+        const res = await fetch(`/api/vendors/${effectiveVendorId}/collections`);
+        if (res.ok) {
+          const collectionsData = await res.json();
+          setCollections(collectionsData);
+        }
+      } catch (error) {
+        console.error("Error fetching collections:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getCollections();
+  }, [effectiveVendorId]);
 
   if (loading) return <Loader />;
 
@@ -229,6 +220,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
           e.preventDefault();
           form.handleSubmit(onSubmit)(e);
         }} className="space-y-8">
+          
+          {/* Title Field */}
           <FormField
             control={form.control}
             name="title"
@@ -246,6 +239,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
               </FormItem>
             )}
           />
+
+          {/* Description Field */}
           <FormField
             control={form.control}
             name="description"
@@ -264,12 +259,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
               </FormItem>
             )}
           />
+
+          {/* Media Upload */}
           <FormField
             control={form.control}
             name="media"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Images</FormLabel>
+                <FormLabel>Image</FormLabel>
                 <FormControl>
                   <ImageUpload
                     value={field.value}
@@ -286,7 +283,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
             )}
           />
 
-          <div className="md:grid md:grid-cols-1 gap-8">
+          {/* Price and Stock Row */}
+          <div className="md:grid md:grid-cols-2 gap-8">
             <FormField
               control={form.control}
               name="price"
@@ -296,7 +294,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
                   <FormControl>
                     <Input
                       type="number"
-                      placeholder="0.00"
+                      placeholder="Price"
                       {...field}
                       onKeyDown={handleKeyPress}
                     />
@@ -305,107 +303,156 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialData, vendorId }) => {
                 </FormItem>
               )}
             />
+
+            {/* Enhanced Stock Quantity Field */}
+            <FormField
+              control={form.control}
+              name="stockQuantity"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    Stock Quantity
+                  </FormLabel>
+                  <FormControl>
+                    <div className="flex items-center border border-input rounded-md">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-r-none"
+                        onClick={handleStockDecrease}
+                        disabled={field.value <= 0}
+                      >
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                      <Input
+                        type="number"
+                        min="0"
+                        className="border-0 border-x text-center focus-visible:ring-0 rounded-none"
+                        {...field}
+                        onKeyDown={handleKeyPress}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-l-none"
+                        onClick={handleStockIncrease}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </FormControl>
+                  <div className="text-xs text-muted-foreground">
+                    {field.value === 0 && (
+                      <span className="text-red-500">⚠️ Out of stock</span>
+                    )}
+                    {field.value > 0 && field.value <= 10 && (
+                      <span className="text-yellow-600">⚠️ Low stock</span>
+                    )}
+                    {field.value > 10 && (
+                      <span className="text-green-600">✅ In stock</span>
+                    )}
+                  </div>
+                  <FormMessage className="text-red-1" />
+                </FormItem>
+              )}
+            />
           </div>
 
-          <div className="md:grid md:grid-cols-3 gap-8">
-            {collections.length > 0 && (
-              <FormField
-                control={form.control}
-                name="collections"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Collections</FormLabel>
-                    <FormControl>
-                      <MultiSelect
-                        placeholder="Select collections"
-                        collections={collections}
-                        value={field.value}
-                        onChange={(_id) =>
-                          field.onChange([...field.value, _id])
-                        }
-                        onRemove={(idToRemove) =>
-                          field.onChange([
-                            ...field.value.filter(
-                              (collectionId) => collectionId !== idToRemove
-                            ),
-                          ])
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage className="text-red-1" />
-                  </FormItem>
-                )}
-              />
+          {/* Collections Field */}
+          <FormField
+            control={form.control}
+            name="collections"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Collections</FormLabel>
+                <FormControl>
+                  <MultiSelect
+                    placeholder="Select collections"
+                    collections={collections}
+                    value={field.value}
+                    onChange={(collectionId) =>
+                      field.onChange([...field.value, collectionId])
+                    }
+                    onRemove={(collectionIdToRemove) =>
+                      field.onChange([
+                        ...field.value.filter(
+                          (collectionId) => collectionId !== collectionIdToRemove
+                        ),
+                      ])
+                    }
+                  />
+                </FormControl>
+                <FormMessage className="text-red-1" />
+              </FormItem>
             )}
-            <FormField
-              control={form.control}
-              name="colors"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Colors</FormLabel>
-                  <FormControl>
-                    <MultiText
-                      placeholder="Add colors (e.g., Red, Blue, Green)"
-                      value={field.value}
-                      onChange={(color) =>
-                        field.onChange([...field.value, color])
-                      }
-                      onRemove={(colorToRemove) =>
-                        field.onChange([
-                          ...field.value.filter(
-                            (color) => color !== colorToRemove
-                          ),
-                        ])
-                      }
-                    />
-                  </FormControl>
-                  <FormMessage className="text-red-1" />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="sizes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Sizes</FormLabel>
-                  <FormControl>
-                    <MultiText
-                      placeholder="Add sizes (e.g., S, M, L, XL)"
-                      value={field.value}
-                      onChange={(size) =>
-                        field.onChange([...field.value, size])
-                      }
-                      onRemove={(sizeToRemove) =>
-                        field.onChange([
-                          ...field.value.filter(
-                            (size) => size !== sizeToRemove
-                          ),
-                        ])
-                      }
-                    />
-                  </FormControl>
-                  <FormMessage className="text-red-1" />
-                </FormItem>
-              )}
-            />
-          </div>
+          />
+
+          {/* Colors Field */}
+          <FormField
+            control={form.control}
+            name="colors"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Colors</FormLabel>
+                <FormControl>
+                  <MultiText
+                    placeholder="Add colors"
+                    value={field.value}
+                    onChange={(color) => field.onChange([...field.value, color])}
+                    onRemove={(colorToRemove) =>
+                      field.onChange([
+                        ...field.value.filter((color) => color !== colorToRemove),
+                      ])
+                    }
+                  />
+                </FormControl>
+                <FormMessage className="text-red-1" />
+              </FormItem>
+            )}
+          />
+
+          {/* Sizes Field */}
+          <FormField
+            control={form.control}
+            name="sizes"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Sizes</FormLabel>
+                <FormControl>
+                  <MultiText
+                    placeholder="Add sizes"
+                    value={field.value}
+                    onChange={(size) => field.onChange([...field.value, size])}
+                    onRemove={(sizeToRemove) =>
+                      field.onChange([
+                        ...field.value.filter((size) => size !== sizeToRemove),
+                      ])
+                    }
+                  />
+                </FormControl>
+                <FormMessage className="text-red-1" />
+              </FormItem>
+            )}
+          />
 
           <div className="flex gap-10">
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="bg-blue-1 text-white"
               disabled={submitting || submitSuccess}
             >
-              {submitting ? "Submitting..." : "Submit"}
+              {submitting ? "Submitting..." : (initialData ? "Update" : "Create")}
             </Button>
             <Button
-              type="button" // Important: This must be type="button"
+              type="button"
               onClick={handleCancel}
               className="bg-blue-1 text-white"
-              disabled={submitting || submitSuccess}
+              disabled={submitting}
             >
-              Cancel
+              Discard
             </Button>
           </div>
         </form>

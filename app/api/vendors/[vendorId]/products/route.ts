@@ -1,4 +1,4 @@
-// app/api/vendors/[vendorId]/products/route.ts (ADMIN PROJECT)
+// app/api/vendors/[vendorId]/products/route.ts - ADMIN (Updated)
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDB } from "@/lib/mongoDB";
 import Product from "@/lib/models/Product";
@@ -73,7 +73,6 @@ export async function POST(
       sizes,
       colors,
       price,
-      expense,
       stockQuantity = 0
     } = await req.json();
 
@@ -97,10 +96,9 @@ export async function POST(
       sizes: sizes || [],
       colors: colors || [],
       price,
-      expense: expense || 0,
       vendor: params.vendorId,
       isApproved: true, // Auto-approve for now
-      stockQuantity
+      stockQuantity: Math.max(0, parseInt(stockQuantity) || 0)
     });
 
     // Generate demo social posts for Instagram and Facebook

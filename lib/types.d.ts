@@ -1,4 +1,4 @@
-// lib/types.d.ts - Updated with proper vendor typing
+// lib/types.d.ts - BOTH ADMIN & STORE
 type VendorType = {
   _id: string;
   clerkId: string;
@@ -37,12 +37,6 @@ type VendorType = {
   approvedBy?: string;
   suspendedAt?: Date;
   suspendedReason?: string;
-  suspendedBy?: string;
-  appealSubmitted?: boolean;
-  appealReason?: string;
-  appealSubmittedAt?: Date;
-  appealResponse?: string;
-  appealResponseAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -52,7 +46,7 @@ type CollectionType = {
   title: string;
   description: string;
   image: string;
-  vendor: string | VendorType; // Can be populated or just ID
+  vendor: string | VendorType;
   products: ProductType[];
   isActive: boolean;
   createdAt: Date;
@@ -72,9 +66,9 @@ type ProductType = {
   price: number;
   expense: number;
   cost?: number;
-  vendor: string | VendorType; // Can be populated or just ID
+  vendor: string | VendorType;
   isApproved: boolean;
-  stockQuantity: number;
+  stockQuantity: number; // Enhanced: Always include stock quantity
   createdAt: string | Date;
   updatedAt: string | Date;
 }
@@ -131,4 +125,66 @@ type CustomerType = {
   clerkId: string;
   name: string;
   email: string;
+}
+
+// Enhanced: Stock management types
+type StockUpdateType = {
+  productId: string;
+  action: "increase" | "decrease" | "set";
+  quantity: number;
+  previousStock: number;
+  newStock: number;
+  updatedBy?: string;
+  timestamp: Date;
+}
+
+type StockValidationResult = {
+  productId: string;
+  title: string;
+  currentStock: number;
+  requestedQuantity: number;
+  isValid: boolean;
+  message?: string;
+}
+
+type CartItemType = {
+  item: ProductType;
+  quantity: number;
+  color?: string;
+  size?: string;
+}
+
+// Enhanced: Stock status types
+type StockStatus = "in-stock" | "low-stock" | "out-of-stock" | "insufficient";
+
+type StockInfo = {
+  status: StockStatus;
+  message: string;
+  color: string;
+  quantity: number;
+}
+
+// Enhanced: API response types for stock operations
+type StockUpdateResponse = {
+  success: boolean;
+  product: ProductType;
+  previousStock: number;
+  newStock: number;
+  action: string;
+  quantity: number;
+}
+
+type StockValidationResponse = {
+  productId: string;
+  title: string;
+  stockQuantity: number;
+  isAvailable: boolean;
+  lastUpdated: string;
+  error?: string;
+}
+
+type BatchStockValidationResponse = {
+  results: StockValidationResponse[];
+  totalProducts: number;
+  availableProducts: number;
 }

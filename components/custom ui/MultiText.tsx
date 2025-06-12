@@ -16,16 +16,21 @@ interface MultiTextProps {
 
 const MultiText: React.FC<MultiTextProps> = ({
   placeholder,
-  value,
+  value = [], // Provide default empty array
   onChange,
   onRemove,
 }) => {
   const [inputValue, setInputValue] = useState("");
 
   const addValue = (item: string) => {
-    onChange(item);
-    setInputValue("");
+    if (item.trim() && !value.includes(item.trim())) {
+      onChange(item.trim());
+      setInputValue("");
+    }
   };
+
+  // Ensure value is always an array
+  const safeValue = Array.isArray(value) ? value : [];
 
   return (
     <>
@@ -42,7 +47,7 @@ const MultiText: React.FC<MultiTextProps> = ({
       />
 
       <div className="flex gap-1 flex-wrap mt-4">
-        {value.map((item, index) => (
+        {safeValue.map((item, index) => (
           <Badge key={index} className="bg-grey-1 text-white">
             {item}
             <button
