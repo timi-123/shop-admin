@@ -52,7 +52,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const [loading, setLoading] = useState(true);
   const [collections, setCollections] = useState<CollectionType[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Determine effective vendor ID
@@ -106,9 +105,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
   };
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    // Prevent multiple submissions and navigation conflicts
+    if (submitting) {
+      console.log("Form already submitting, ignoring duplicate submission");
+      return;
+    }
+    
     try {
-      if (submitting) return;
-      
       setSubmitting(true);
       setError(null);
       
@@ -118,7 +121,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
       if (!effectiveVendorId) {
         toast.error("Vendor ID is missing");
         setError("Vendor ID is missing");
-        setSubmitting(false);
         return;
       }
       
@@ -145,16 +147,23 @@ const ProductForm: React.FC<ProductFormProps> = ({
         throw new Error(errorData.error || "Failed to submit product");
       }
       
-      setSubmitSuccess(true);
+      const productData = await res.json();
+      console.log("Product saved successfully:", productData);
+      
       toast.success(`Product ${initialData ? "updated" : "created"} successfully!`);
       
+      // Use window.location for more reliable navigation after form submission
+      // This prevents conflicts with React Router state
+      const redirectUrl = isAdmin 
+        ? `/vendors/${effectiveVendorId}/products` 
+        : "/my-products";
+      
+      console.log("Redirecting to:", redirectUrl);
+      
+      // Small delay to ensure toast is visible, then navigate
       setTimeout(() => {
-        if (isAdmin) {
-          router.push(`/vendors/${effectiveVendorId}/products`);
-        } else {
-          router.push("/my-products");
-        }
-      }, 800);
+        window.location.href = redirectUrl;
+      }, 1000);
       
     } catch (err: any) {
       console.error("Error submitting product:", err);
@@ -165,25 +174,39 @@ const ProductForm: React.FC<ProductFormProps> = ({
     }
   };
 
-  const handleCancel = (e: React.MouseEvent) => {
-    e.preventDefault();
-    
-    if (isAdmin) {
-      router.push(`/vendors/${effectiveVendorId}/products`);
-    } else {
-      router.push("/my-products");
+  // Improved cancel handler that prevents navigation conflicts
+  const handleCancel = () => {
+    if (submitting) {
+      console.log("Cannot cancel while submitting");
+      return;
     }
+    
+    const cancelUrl = isAdmin 
+      ? `/vendors/${effectiveVendorId}/products` 
+      : "/my-products";
+    
+    console.log("Cancelling and navigating to:", cancelUrl);
+    window.location.href = cancelUrl;
   };
 
   useEffect(() => {
     const getCollections = async () => {
       try {
-        if (!effectiveVendorId) return;
+        if (!effectiveVendorId) {
+          console.log("No vendor ID available, skipping collections fetch");
+          setLoading(false);
+          return;
+        }
+        
+        console.log("Fetching collections for vendor:", effectiveVendorId);
         
         const res = await fetch(`/api/vendors/${effectiveVendorId}/collections`);
         if (res.ok) {
           const collectionsData = await res.json();
           setCollections(collectionsData);
+          console.log("Collections loaded:", collectionsData.length);
+        } else {
+          console.error("Failed to fetch collections:", res.status);
         }
       } catch (error) {
         console.error("Error fetching collections:", error);
@@ -216,10 +239,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
       )}
       
       <Form {...form}>
-        <form onSubmit={(e) => {
-          e.preventDefault();
-          form.handleSubmit(onSubmit)(e);
-        }} className="space-y-8">
+        <form 
+          onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            form.handleSubmit(onSubmit)(e);
+          }} 
+          className="space-y-8"
+        >
           
           {/* Title Field */}
           <FormField
@@ -233,6 +260,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     placeholder="Product title"
                     {...field}
                     onKeyDown={handleKeyPress}
+                    disabled={submitting}
                   />
                 </FormControl>
                 <FormMessage className="text-red-1" />
@@ -253,6 +281,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     {...field}
                     rows={5}
                     onKeyDown={handleKeyPress}
+                    disabled={submitting}
                   />
                 </FormControl>
                 <FormMessage className="text-red-1" />
@@ -297,6 +326,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                       placeholder="Price"
                       {...field}
                       onKeyDown={handleKeyPress}
+                      disabled={submitting}
                     />
                   </FormControl>
                   <FormMessage className="text-red-1" />
@@ -322,7 +352,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                         size="icon"
                         className="h-8 w-8 rounded-r-none"
                         onClick={handleStockDecrease}
-                        disabled={field.value <= 0}
+                        disabled={field.value <= 0 || submitting}
                       >
                         <Minus className="h-3 w-3" />
                       </Button>
@@ -332,6 +362,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                         className="border-0 border-x text-center focus-visible:ring-0 rounded-none"
                         {...field}
                         onKeyDown={handleKeyPress}
+                        disabled={submitting}
                       />
                       <Button
                         type="button"
@@ -339,6 +370,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                         size="icon"
                         className="h-8 w-8 rounded-l-none"
                         onClick={handleStockIncrease}
+                        disabled={submitting}
                       >
                         <Plus className="h-3 w-3" />
                       </Button>
@@ -442,17 +474,17 @@ const ProductForm: React.FC<ProductFormProps> = ({
             <Button
               type="submit"
               className="bg-blue-1 text-white"
-              disabled={submitting || submitSuccess}
+              disabled={submitting}
             >
-              {submitting ? "Submitting..." : (initialData ? "Update" : "Create")}
+              {submitting ? "Saving..." : (initialData ? "Update Product" : "Create Product")}
             </Button>
             <Button
               type="button"
               onClick={handleCancel}
-              className="bg-blue-1 text-white"
+              className="bg-grey-1 text-black"
               disabled={submitting}
             >
-              Discard
+              Cancel
             </Button>
           </div>
         </form>
