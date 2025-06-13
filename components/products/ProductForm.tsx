@@ -1,3 +1,4 @@
+// components/products/ProductForm.tsx - CRITICAL FIXES for Authentication Issues
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -5,6 +6,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useUser } from "@clerk/nextjs";
+import { useRole } from "@/lib/hooks/useRole";
 import toast from "react-hot-toast";
 
 import { Separator } from "../ui/separator";
@@ -49,6 +52,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
   isAdmin = false,
 }) => {
   const router = useRouter();
+  const { user, isLoaded } = useUser();
+  const { role, isVendor } = useRole();
   const [loading, setLoading] = useState(true);
   const [collections, setCollections] = useState<CollectionType[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -61,15 +66,15 @@ const ProductForm: React.FC<ProductFormProps> = ({
     resolver: zodResolver(formSchema),
     defaultValues: initialData
       ? {
-          title: initialData.title || "",
-          description: initialData.description || "",
-          media: initialData.media || [],
-          collections: initialData.collections?.map(
-            (collection) => collection._id
-          ) || [],
-          sizes: initialData.sizes || [],
-          colors: initialData.colors || [],
-          price: initialData.price || 0.1,
+          title: initialData.title,
+          description: initialData.description,
+          media: initialData.media,
+          collections: initialData.collections.map((collection) => 
+            typeof collection === 'string' ? collection : collection._id
+          ),
+          sizes: initialData.sizes,
+          colors: initialData.colors,
+          price: initialData.price,
           stockQuantity: initialData.stockQuantity || 0,
         }
       : {
@@ -84,86 +89,68 @@ const ProductForm: React.FC<ProductFormProps> = ({
         },
   });
 
-  const handleKeyPress = (
-    e: React.KeyboardEvent<HTMLInputElement> | React.KeyboardEvent<HTMLTextAreaElement>
-  ) => {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLFormElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
     }
   };
 
-  const handleStockIncrease = () => {
-    const currentStock = form.getValues("stockQuantity");
-    form.setValue("stockQuantity", currentStock + 1);
-  };
-
-  const handleStockDecrease = () => {
-    const currentStock = form.getValues("stockQuantity");
-    if (currentStock > 0) {
-      form.setValue("stockQuantity", currentStock - 1);
-    }
-  };
-
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    // Prevent multiple submissions and navigation conflicts
+    console.log("Form submitted with values:", values);
+    
     if (submitting) {
-      console.log("Form already submitting, ignoring duplicate submission");
+      console.log("Already submitting, ignoring duplicate submission");
       return;
     }
-    
+
+    setSubmitting(true);
+    setError(null);
+
     try {
-      setSubmitting(true);
-      setError(null);
-      
-      console.log(`Submitting product for vendor ${effectiveVendorId}`);
-      console.log("Form data:", values);
-      
-      if (!effectiveVendorId) {
-        toast.error("Vendor ID is missing");
-        setError("Vendor ID is missing");
-        return;
-      }
-      
-      let url;
-      let method = "POST";
-      
-      if (initialData) {
-        url = `/api/vendors/${effectiveVendorId}/products/${initialData._id}`;
-        method = "PUT";
-      } else {
-        url = `/api/vendors/${effectiveVendorId}/products`;
-      }
-      
-      const res = await fetch(url, {
+      // Prepare the request body
+      const requestBody = {
+        ...values,
+        vendor: effectiveVendorId,
+      };
+
+      console.log("Submitting product with body:", requestBody);
+
+      const url = initialData ? `/api/products/${initialData._id}` : "/api/products";
+      const method = initialData ? "POST" : "POST";
+
+      const response = await fetch(url, {
         method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(values),
+        body: JSON.stringify(requestBody),
       });
-      
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to submit product");
+
+      console.log("API Response status:", response.status);
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log("Product saved successfully:", result);
+        
+        toast.success(`Product ${initialData ? "updated" : "created"} successfully!`);
+        
+        // Navigate after successful submission
+        const redirectUrl = isAdmin 
+          ? `/vendors/${effectiveVendorId}/products` 
+          : "/my-products";
+        
+        console.log("Redirecting to:", redirectUrl);
+        
+        // Use router.push instead of window.location for better handling
+        setTimeout(() => {
+          router.push(redirectUrl);
+        }, 1000);
+        
+      } else {
+        const errorData = await response.json();
+        console.error("API Error:", errorData);
+        throw new Error(errorData.error || "Failed to save product");
       }
-      
-      const productData = await res.json();
-      console.log("Product saved successfully:", productData);
-      
-      toast.success(`Product ${initialData ? "updated" : "created"} successfully!`);
-      
-      // Use window.location for more reliable navigation after form submission
-      // This prevents conflicts with React Router state
-      const redirectUrl = isAdmin 
-        ? `/vendors/${effectiveVendorId}/products` 
-        : "/my-products";
-      
-      console.log("Redirecting to:", redirectUrl);
-      
-      // Small delay to ensure toast is visible, then navigate
-      setTimeout(() => {
-        window.location.href = redirectUrl;
-      }, 1000);
       
     } catch (err: any) {
       console.error("Error submitting product:", err);
@@ -174,7 +161,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
     }
   };
 
-  // Improved cancel handler that prevents navigation conflicts
   const handleCancel = () => {
     if (submitting) {
       console.log("Cannot cancel while submitting");
@@ -186,11 +172,17 @@ const ProductForm: React.FC<ProductFormProps> = ({
       : "/my-products";
     
     console.log("Cancelling and navigating to:", cancelUrl);
-    window.location.href = cancelUrl;
+    router.push(cancelUrl);
   };
 
   useEffect(() => {
     const getCollections = async () => {
+      // CRITICAL FIX: Wait for authentication before making API calls
+      if (!isLoaded || !user) {
+        console.log("User not loaded yet, waiting...");
+        return;
+      }
+
       try {
         if (!effectiveVendorId) {
           console.log("No vendor ID available, skipping collections fetch");
@@ -200,23 +192,41 @@ const ProductForm: React.FC<ProductFormProps> = ({
         
         console.log("Fetching collections for vendor:", effectiveVendorId);
         
-        const res = await fetch(`/api/vendors/${effectiveVendorId}/collections`);
+        // CRITICAL FIX: Add proper error handling for collections fetch
+        const res = await fetch(`/api/vendors/${effectiveVendorId}/collections`, {
+          cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
         if (res.ok) {
           const collectionsData = await res.json();
           setCollections(collectionsData);
           console.log("Collections loaded:", collectionsData.length);
         } else {
-          console.error("Failed to fetch collections:", res.status);
+          console.error("Failed to fetch collections:", res.status, res.statusText);
+          // Don't set error for collections failure, just continue without collections
+          if (res.status === 401) {
+            console.log("Unauthorized - user may not be authenticated yet");
+          }
         }
       } catch (error) {
         console.error("Error fetching collections:", error);
+        // Don't set error for collections failure, just continue without collections
       } finally {
         setLoading(false);
       }
     };
 
-    getCollections();
-  }, [effectiveVendorId]);
+    // CRITICAL FIX: Only fetch collections when user is loaded
+    if (isLoaded && user) {
+      getCollections();
+    } else if (isLoaded && !user) {
+      // User is loaded but not authenticated
+      setLoading(false);
+    }
+  }, [effectiveVendorId, isLoaded, user]);
 
   if (loading) return <Loader />;
 
@@ -225,30 +235,22 @@ const ProductForm: React.FC<ProductFormProps> = ({
       {initialData ? (
         <div className="flex items-center justify-between">
           <p className="text-heading2-bold">Edit Product</p>
-          <Delete id={initialData._id} item="product" />
+          <Delete item="product" id={initialData._id} />
         </div>
       ) : (
         <p className="text-heading2-bold">Create Product</p>
       )}
+      
       <Separator className="bg-grey-1 mt-4 mb-7" />
       
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 p-4 mb-6 rounded-md">
-          {error}
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-800">{error}</p>
         </div>
       )}
       
       <Form {...form}>
-        <form 
-          onSubmit={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            form.handleSubmit(onSubmit)(e);
-          }} 
-          className="space-y-8"
-        >
-          
-          {/* Title Field */}
+        <form onSubmit={form.handleSubmit(onSubmit)} onKeyDown={handleKeyPress}>
           <FormField
             control={form.control}
             name="title"
@@ -256,19 +258,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
               <FormItem>
                 <FormLabel>Title</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="Product title"
-                    {...field}
-                    onKeyDown={handleKeyPress}
-                    disabled={submitting}
-                  />
+                  <Input placeholder="Title" {...field} />
                 </FormControl>
-                <FormMessage className="text-red-1" />
+                <FormMessage />
               </FormItem>
             )}
           />
-
-          {/* Description Field */}
+          
           <FormField
             control={form.control}
             name="description"
@@ -276,20 +272,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
               <FormItem>
                 <FormLabel>Description</FormLabel>
                 <FormControl>
-                  <Textarea
-                    placeholder="Product description"
-                    {...field}
-                    rows={5}
-                    onKeyDown={handleKeyPress}
-                    disabled={submitting}
-                  />
+                  <Textarea placeholder="Description" {...field} rows={5} />
                 </FormControl>
-                <FormMessage className="text-red-1" />
+                <FormMessage />
               </FormItem>
             )}
           />
-
-          {/* Media Upload */}
+          
           <FormField
             control={form.control}
             name="media"
@@ -307,12 +296,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     }
                   />
                 </FormControl>
-                <FormMessage className="text-red-1" />
+                <FormMessage />
               </FormItem>
             )}
           />
 
-          {/* Price and Stock Row */}
           <div className="md:grid md:grid-cols-2 gap-8">
             <FormField
               control={form.control}
@@ -321,132 +309,70 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 <FormItem>
                   <FormLabel>Price ($)</FormLabel>
                   <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="Price"
-                      {...field}
-                      onKeyDown={handleKeyPress}
-                      disabled={submitting}
+                    <Input 
+                      type="number" 
+                      placeholder="Price" 
+                      {...field} 
+                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                     />
                   </FormControl>
-                  <FormMessage className="text-red-1" />
+                  <FormMessage />
                 </FormItem>
               )}
             />
-
-            {/* Enhanced Stock Quantity Field */}
+            
             <FormField
               control={form.control}
               name="stockQuantity"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex items-center gap-2">
-                    <Package className="h-4 w-4" />
-                    Stock Quantity
-                  </FormLabel>
+                  <FormLabel>Stock Quantity</FormLabel>
                   <FormControl>
-                    <div className="flex items-center border border-input rounded-md">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 rounded-r-none"
-                        onClick={handleStockDecrease}
-                        disabled={field.value <= 0 || submitting}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <Input
-                        type="number"
-                        min="0"
-                        className="border-0 border-x text-center focus-visible:ring-0 rounded-none"
-                        {...field}
-                        onKeyDown={handleKeyPress}
-                        disabled={submitting}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 rounded-l-none"
-                        onClick={handleStockIncrease}
-                        disabled={submitting}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                    </div>
+                    <Input 
+                      type="number" 
+                      placeholder="Stock Quantity" 
+                      {...field} 
+                      onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                    />
                   </FormControl>
-                  <div className="text-xs text-muted-foreground">
-                    {field.value === 0 && (
-                      <span className="text-red-500">⚠️ Out of stock</span>
-                    )}
-                    {field.value > 0 && field.value <= 10 && (
-                      <span className="text-yellow-600">⚠️ Low stock</span>
-                    )}
-                    {field.value > 10 && (
-                      <span className="text-green-600">✅ In stock</span>
-                    )}
-                  </div>
-                  <FormMessage className="text-red-1" />
+                  <FormMessage />
                 </FormItem>
               )}
             />
           </div>
 
-          {/* Collections Field */}
-          <FormField
-            control={form.control}
-            name="collections"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Collections</FormLabel>
-                <FormControl>
-                  <MultiSelect
-                    placeholder="Select collections"
-                    collections={collections}
-                    value={field.value}
-                    onChange={(collectionId) =>
-                      field.onChange([...field.value, collectionId])
-                    }
-                    onRemove={(collectionIdToRemove) =>
-                      field.onChange([
-                        ...field.value.filter(
-                          (collectionId) => collectionId !== collectionIdToRemove
-                        ),
-                      ])
-                    }
-                  />
-                </FormControl>
-                <FormMessage className="text-red-1" />
-              </FormItem>
-            )}
-          />
+          {collections.length > 0 && (
+            <FormField
+              control={form.control}
+              name="collections"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Collections</FormLabel>
+                  <FormControl>
+                    <MultiSelect
+                      placeholder="Collections"
+                      collections={collections}
+                      value={field.value}
+                      onChange={(_id) =>
+                        field.value.includes(_id)
+                          ? field.onChange([
+                              ...field.value.filter((value) => value !== _id),
+                            ])
+                          : field.onChange([...field.value, _id])
+                      }
+                      onRemove={(_id) =>
+                        field.onChange([
+                          ...field.value.filter((value) => value !== _id),
+                        ])
+                      }
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
-          {/* Colors Field */}
-          <FormField
-            control={form.control}
-            name="colors"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Colors</FormLabel>
-                <FormControl>
-                  <MultiText
-                    placeholder="Add colors"
-                    value={field.value}
-                    onChange={(color) => field.onChange([...field.value, color])}
-                    onRemove={(colorToRemove) =>
-                      field.onChange([
-                        ...field.value.filter((color) => color !== colorToRemove),
-                      ])
-                    }
-                  />
-                </FormControl>
-                <FormMessage className="text-red-1" />
-              </FormItem>
-            )}
-          />
-
-          {/* Sizes Field */}
           <FormField
             control={form.control}
             name="sizes"
@@ -455,7 +381,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 <FormLabel>Sizes</FormLabel>
                 <FormControl>
                   <MultiText
-                    placeholder="Add sizes"
+                    placeholder="Sizes"
                     value={field.value}
                     onChange={(size) => field.onChange([...field.value, size])}
                     onRemove={(sizeToRemove) =>
@@ -465,23 +391,42 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     }
                   />
                 </FormControl>
-                <FormMessage className="text-red-1" />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="colors"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Colors</FormLabel>
+                <FormControl>
+                  <MultiText
+                    placeholder="Colors"
+                    value={field.value}
+                    onChange={(color) => field.onChange([...field.value, color])}
+                    onRemove={(colorToRemove) =>
+                      field.onChange([
+                        ...field.value.filter((color) => color !== colorToRemove),
+                      ])
+                    }
+                  />
+                </FormControl>
+                <FormMessage />
               </FormItem>
             )}
           />
 
           <div className="flex gap-10">
-            <Button
-              type="submit"
-              className="bg-blue-1 text-white"
-              disabled={submitting}
-            >
-              {submitting ? "Saving..." : (initialData ? "Update Product" : "Create Product")}
+            <Button type="submit" className="bg-blue-1 text-white" disabled={submitting}>
+              {submitting ? "Saving..." : "Submit"}
             </Button>
-            <Button
-              type="button"
-              onClick={handleCancel}
-              className="bg-grey-1 text-black"
+            <Button 
+              type="button" 
+              onClick={handleCancel} 
+              className="bg-grey-1 text-white"
               disabled={submitting}
             >
               Cancel

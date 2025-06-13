@@ -1,4 +1,4 @@
-// components/auth/VendorAccessGuard.tsx
+// components/auth/VendorAccessGuard.tsx - FIXED VERSION
 "use client";
 
 import { useEffect, useState } from "react";
@@ -21,31 +21,61 @@ const VendorAccessGuard: React.FC<VendorAccessGuardProps> = ({ children }) => {
 
   useEffect(() => {
     const checkVendorStatus = async () => {
-      if (!isLoaded || roleLoading || !user || !isVendor) {
+      // CRITICAL FIX: Only proceed if both user and role are loaded
+      if (!isLoaded || roleLoading) {
+        console.log("Waiting for auth/role to load in VendorAccessGuard...");
+        return;
+      }
+
+      // CRITICAL FIX: Only fetch vendor data if user is authenticated and is a vendor
+      if (!user || !isVendor) {
+        console.log("User not authenticated or not a vendor, skipping vendor status check");
         setLoading(false);
         return;
       }
 
       try {
-        const response = await fetch("/api/vendors/my-vendor");
+        console.log("Checking vendor status for user:", user.id);
+        
+        const response = await fetch("/api/vendors/my-vendor", {
+          cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
         if (response.ok) {
           const vendorData = await response.json();
-
-            console.log("=== VENDOR ACCESS GUARD ===");
-      console.log("Vendor data loaded:", vendorData);
-      console.log("Vendor status:", vendorData.status);
-      console.log("Appeal submitted:", vendorData.appealSubmitted);
-
+          console.log("=== VENDOR ACCESS GUARD ===");
+          console.log("Vendor data loaded:", vendorData);
+          console.log("Vendor status:", vendorData.status);
+          console.log("Appeal submitted:", vendorData.appealSubmitted);
           setVendor(vendorData);
+        } else {
+          // CRITICAL FIX: Handle error responses gracefully
+          console.error("Failed to fetch vendor status:", response.status, response.statusText);
+          
+          if (response.status === 401) {
+            console.log("Unauthorized - user may not be authenticated yet");
+          } else if (response.status === 403) {
+            console.log("User is not a vendor");
+          } else if (response.status === 404) {
+            console.log("Vendor not found");
+          }
+          // Don't set error state, just continue without vendor data
         }
       } catch (error) {
-        console.error("Error fetching vendor status:", error);
+        console.error("Network error fetching vendor status:", error);
+        // Don't set error state, just continue without vendor data
       } finally {
         setLoading(false);
       }
     };
 
-    checkVendorStatus();
+    // CRITICAL FIX: Only run when both user and role are loaded
+    if (isLoaded && !roleLoading) {
+      checkVendorStatus();
+    }
   }, [user, isVendor, isLoaded, roleLoading]);
 
   // Show loader while checking status

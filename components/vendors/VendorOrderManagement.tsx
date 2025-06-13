@@ -1,4 +1,4 @@
-// components/vendors/VendorOrderManagement.tsx
+// components/vendors/VendorOrderManagement.tsx - COMPLETE REPLACEMENT
 "use client";
 
 import { useState, useEffect } from "react";
@@ -29,6 +29,7 @@ const VendorOrderManagement = ({ vendorId }: VendorOrderManagementProps) => {
   const [orders, setOrders] = useState<VendorOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<VendorOrder | null>(null);
 
   const STATUS_OPTIONS = [
     { value: "order_received", label: "Order Received", description: "Vendor has seen your order" },
@@ -72,48 +73,7 @@ const VendorOrderManagement = ({ vendorId }: VendorOrderManagementProps) => {
     fetchOrders();
   }, [vendorId]);
 
-  const updateOrderStatus = async (
-    orderId: string, 
-    status: string, 
-    trackingData?: { trackingNumber?: string; carrier?: string; estimatedDelivery?: string }
-  ) => {
-    setUpdatingStatus(orderId);
-    try {
-      const response = await fetch(`/api/vendors/${vendorId}/orders/${orderId}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          status,
-          ...trackingData
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        toast.success("Order status updated successfully");
-        
-        // Update the local state
-        setOrders(prevOrders => 
-          prevOrders.map(order => 
-            order._id === orderId 
-              ? { ...order, status, customerStatusMessage: result.vendorOrder.customerStatusMessage }
-              : order
-          )
-        );
-      } else {
-        const error = await response.json();
-        toast.error(error.error || "Failed to update order status");
-      }
-    } catch (error) {
-      console.error("Error updating order status:", error);
-      toast.error("Error updating order status");
-    } finally {
-      setUpdatingStatus(null);
-    }
-  };
-
+  // StatusUpdateModal Component
   const StatusUpdateModal = ({ order, onClose }: { order: VendorOrder; onClose: () => void }) => {
     const [selectedStatus, setSelectedStatus] = useState(order.status);
     const [trackingNumber, setTrackingNumber] = useState(order.trackingInfo?.trackingNumber || "");
@@ -121,91 +81,184 @@ const VendorOrderManagement = ({ vendorId }: VendorOrderManagementProps) => {
     const [estimatedDelivery, setEstimatedDelivery] = useState(
       order.trackingInfo?.estimatedDelivery ? order.trackingInfo.estimatedDelivery.split('T')[0] : ""
     );
+    const [customMessage, setCustomMessage] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      
-      const trackingData = selectedStatus === "shipped" ? {
-        trackingNumber: trackingNumber.trim() || undefined,
-        carrier: carrier.trim() || undefined,
-        estimatedDelivery: estimatedDelivery || undefined
-      } : {};
+      setIsSubmitting(true);
 
-      updateOrderStatus(order._id, selectedStatus, trackingData);
-      onClose();
+      try {
+        const requestBody: any = {
+          status: selectedStatus
+        };
+
+        // Add tracking info if status is shipped
+        if (selectedStatus === "shipped") {
+          if (trackingNumber) requestBody.trackingNumber = trackingNumber;
+          if (carrier) requestBody.carrier = carrier;
+          if (estimatedDelivery) requestBody.estimatedDelivery = estimatedDelivery;
+        }
+
+        // Add custom message if provided
+        if (customMessage.trim()) {
+          requestBody.customMessage = customMessage.trim();
+        }
+
+        const response = await fetch(`/api/vendors/${vendorId}/orders/${order._id}/status`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          toast.success("Order status updated successfully");
+          
+          // Update the local state
+          setOrders(prevOrders => 
+            prevOrders.map(o => 
+              o._id === order._id 
+                ? { 
+                    ...o, 
+                    status: selectedStatus, 
+                    customerStatusMessage: result.vendorOrder?.customerStatusMessage || 
+                      STATUS_OPTIONS.find(s => s.value === selectedStatus)?.description || 
+                      selectedStatus,
+                    trackingInfo: result.vendorOrder?.trackingInfo || o.trackingInfo
+                  }
+                : o
+            )
+          );
+          
+          onClose();
+        } else {
+          const error = await response.json();
+          toast.error(error.error || "Failed to update order status");
+        }
+      } catch (error) {
+        console.error("Error updating order status:", error);
+        toast.error("Error updating order status");
+      } finally {
+        setIsSubmitting(false);
+      }
     };
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 w-full max-w-md">
-          <h3 className="text-lg font-bold mb-4">Update Order Status</h3>
-          
-          <form onSubmit={handleSubmit}>
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Order Status</label>
+        <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Update Order Status</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 text-xl"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="mb-4">
+            <p className="text-sm text-gray-600">Order #{order._id.slice(-8)}</p>
+            <p className="text-sm text-gray-500">Current status: {order.status}</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Status Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                New Status
+              </label>
               <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
               >
-                {STATUS_OPTIONS.map(option => (
+                {STATUS_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
               </select>
               <p className="text-xs text-gray-500 mt-1">
-                Customer will see: "{STATUS_OPTIONS.find(o => o.value === selectedStatus)?.description}"
+                Customer will see: "{STATUS_OPTIONS.find(s => s.value === selectedStatus)?.description}"
               </p>
             </div>
 
+            {/* Custom Message */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Custom Message (Optional)
+              </label>
+              <input
+                type="text"
+                value={customMessage}
+                onChange={(e) => setCustomMessage(e.target.value)}
+                placeholder="Override the default customer message"
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Tracking Information (only for shipped status) */}
             {selectedStatus === "shipped" && (
-              <>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium mb-2">Tracking Number (Optional)</label>
+              <div className="space-y-3 border-t pt-4">
+                <h4 className="font-medium text-gray-700">Shipping Information</h4>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tracking Number
+                  </label>
                   <input
                     type="text"
                     value={trackingNumber}
                     onChange={(e) => setTrackingNumber(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
                     placeholder="Enter tracking number"
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-medium mb-2">Carrier (Optional)</label>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Carrier
+                  </label>
                   <input
                     type="text"
                     value={carrier}
                     onChange={(e) => setCarrier(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="e.g., UPS, FedEx, DHL"
+                    placeholder="e.g., UPS, FedEx, USPS"
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-medium mb-2">Estimated Delivery (Optional)</label>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estimated Delivery Date
+                  </label>
                   <input
                     type="date"
                     value={estimatedDelivery}
                     onChange={(e) => setEstimatedDelivery(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
-              </>
+              </div>
             )}
 
-            <div className="flex gap-3 mt-6">
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4">
               <button
                 type="submit"
-                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700"
+                disabled={isSubmitting}
+                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Update Status
+                {isSubmitting ? "Updating..." : "Update Status"}
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400"
+                className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400"
               >
                 Cancel
               </button>
@@ -216,16 +269,19 @@ const VendorOrderManagement = ({ vendorId }: VendorOrderManagementProps) => {
     );
   };
 
-  const [selectedOrder, setSelectedOrder] = useState<VendorOrder | null>(null);
-
   if (loading) {
-    return <div className="text-center py-8">Loading orders...</div>;
+    return (
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p>Loading orders...</p>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-heading3-bold">Manage Orders</h2>
+        <h2 className="text-xl font-semibold">Order Management</h2>
         <p className="text-sm text-gray-600">{orders.length} orders total</p>
       </div>
 
@@ -266,7 +322,7 @@ const VendorOrderManagement = ({ vendorId }: VendorOrderManagementProps) => {
                 </div>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex gap-3 items-center">
                 <button
                   onClick={() => setSelectedOrder(order)}
                   disabled={updatingStatus === order._id}
@@ -276,8 +332,9 @@ const VendorOrderManagement = ({ vendorId }: VendorOrderManagementProps) => {
                 </button>
                 
                 {order.trackingInfo?.trackingNumber && (
-                  <div className="text-sm text-gray-600 flex items-center">
-                    Tracking: {order.trackingInfo.trackingNumber}
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium">Tracking:</span> {order.trackingInfo.trackingNumber}
+                    {order.trackingInfo.carrier && <span className="ml-2">({order.trackingInfo.carrier})</span>}
                   </div>
                 )}
               </div>

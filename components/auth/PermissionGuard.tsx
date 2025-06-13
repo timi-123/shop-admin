@@ -1,4 +1,4 @@
-// components/auth/PermissionGuard.tsx (STREAMLINED)
+// components/auth/PermissionGuard.tsx - FIXED VERSION
 "use client";
 
 import { useEffect, useState } from "react";
@@ -27,10 +27,15 @@ const PermissionGuard: React.FC<PermissionGuardProps> = ({
 
   useEffect(() => {
     const checkPermissions = async () => {
-      // Wait for authentication and role to be loaded
-      if (!isLoaded || roleLoading) return;
+      // CRITICAL FIX: Wait for BOTH user and role to be fully loaded
+      if (!isLoaded || roleLoading) {
+        console.log("Waiting for auth/role to load...");
+        return;
+      }
 
+      // CRITICAL FIX: Only proceed if user is authenticated
       if (!user) {
+        console.log("No user found, redirecting to sign-in");
         router.replace("/sign-in");
         return;
       }
@@ -38,6 +43,8 @@ const PermissionGuard: React.FC<PermissionGuardProps> = ({
       try {
         setLoading(true);
         setError(null);
+
+        console.log("Checking permissions for user:", user.id, "role:", role);
 
         // Admin has access to everything
         if (isAdmin) {
@@ -59,25 +66,52 @@ const PermissionGuard: React.FC<PermissionGuardProps> = ({
         if (vendorId && isVendor) {
           console.log("Checking vendor ownership for vendorId:", vendorId);
           
-          const response = await fetch("/api/vendors/my-vendor", {
-            cache: 'no-store'
-          });
-          
-          if (response.ok) {
-            const vendorData = await response.json();
-            console.log("My vendor data:", vendorData);
+          // CRITICAL FIX: Add proper error handling and authentication checks
+          try {
+            const response = await fetch("/api/vendors/my-vendor", {
+              cache: 'no-store',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            });
             
-            if (vendorData._id !== vendorId) {
-              console.log("Vendor ID mismatch:", vendorData._id, "vs", vendorId);
-              setError("You can only access your own vendor data");
-              setLoading(false);
-              return;
+            if (response.ok) {
+              const vendorData = await response.json();
+              console.log("My vendor data:", vendorData);
+              
+              if (vendorData._id !== vendorId) {
+                console.log("Vendor ID mismatch:", vendorData._id, "vs", vendorId);
+                setError("You can only access your own vendor data");
+                setLoading(false);
+                return;
+              }
+              
+              console.log("Vendor ownership verified");
+            } else {
+              // CRITICAL FIX: Handle different error statuses gracefully
+              console.error("Failed to fetch vendor data:", response.status, response.statusText);
+              
+              if (response.status === 401) {
+                console.log("Unauthorized - redirecting to sign-in");
+                router.replace("/sign-in");
+                return;
+              } else if (response.status === 403) {
+                setError("You are not a vendor");
+                setLoading(false);
+                return;
+              } else if (response.status === 404) {
+                setError("Vendor account not found");
+                setLoading(false);
+                return;
+              } else {
+                setError("Unable to verify vendor permissions");
+                setLoading(false);
+                return;
+              }
             }
-            
-            console.log("Vendor ownership verified");
-          } else {
-            console.error("Failed to fetch vendor data:", response.status);
-            setError("Unable to verify vendor permissions");
+          } catch (fetchError) {
+            console.error("Network error while fetching vendor data:", fetchError);
+            setError("Unable to verify permissions due to network error");
             setLoading(false);
             return;
           }
@@ -92,9 +126,13 @@ const PermissionGuard: React.FC<PermissionGuardProps> = ({
       }
     };
 
-    checkPermissions();
+    // CRITICAL FIX: Only run when both user and role are loaded
+    if (isLoaded && !roleLoading) {
+      checkPermissions();
+    }
   }, [isLoaded, roleLoading, user, role, isAdmin, isVendor, vendorId, requiredPermissions, router]);
 
+  // CRITICAL FIX: Show loader while authentication is still loading
   if (!isLoaded || roleLoading || loading) {
     return <Loader />;
   }

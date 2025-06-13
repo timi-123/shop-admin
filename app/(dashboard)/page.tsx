@@ -1,9 +1,8 @@
-// app/(dashboard)/page.tsx - FIXED VERSION
+// app/(dashboard)/page.tsx - FIXED VERSION (Removed unused imports)
 "use client";
 
 import { useUser } from "@clerk/nextjs";
 import { useRole } from "@/lib/hooks/useRole";
-import { getTotalSales, getTotalCustomers, getSalesPerMonth } from "@/lib/actions/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import SalesChart from "@/components/custom ui/SalesChart";
@@ -221,6 +220,8 @@ const LandingPageContent = () => {
 
 // Vendor Dashboard Component
 const VendorDashboard = () => {
+  const { user, isLoaded } = useUser(); // Add user context
+  const { role, isVendor } = useRole(); // Add role context
   const [salesData, setSalesData] = useState<any[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
@@ -235,12 +236,21 @@ const VendorDashboard = () => {
 
   useEffect(() => {
     const fetchVendorData = async () => {
+      // CRITICAL FIX: Only fetch if user is loaded and is a vendor
+      if (!isLoaded || !user || !isVendor) {
+        console.log("Skipping vendor data fetch - not a vendor or user not loaded");
+        setLoading(false);
+        return;
+      }
+
       // Minimum loading time to prevent flicker
       const startTime = Date.now();
       const minLoadingTime = 800; // 800ms minimum
 
       try {
-        // Get vendor info first
+        console.log("Fetching vendor data for authenticated vendor user");
+        
+        // Get vendor info first - WITH ERROR HANDLING
         const vendorRes = await fetch("/api/vendors/my-vendor");
         if (vendorRes.ok) {
           const vendorData = await vendorRes.json();
@@ -267,116 +277,185 @@ const VendorDashboard = () => {
             setSalesData(salesData);
           }
 
-          // Process vendor-specific stats - REAL DATA for this vendor
+          // Process vendor-specific stats - REAL DATA for this vendor only
           if (vendorStatsRes.ok) {
             const vendorStats = await vendorStatsRes.json();
-            setVendorStats({
-              totalProducts: vendorStats.totalProducts,
-              totalCollections: vendorStats.totalCollections,
-              vendorEarnings: vendorStats.vendorEarnings,
-            });
+            setVendorStats(vendorStats);
+          }
+        } else {
+          // Handle vendor fetch error gracefully
+          console.error("Failed to fetch vendor data:", vendorRes.status, vendorRes.statusText);
+          if (vendorRes.status === 401) {
+            console.log("Unauthorized - user may not be authenticated yet");
+          } else if (vendorRes.status === 403) {
+            console.log("User is not a vendor");
+          } else if (vendorRes.status === 404) {
+            console.log("Vendor not found");
           }
         }
+
+        // Ensure minimum loading time
+        const elapsed = Date.now() - startTime;
+        if (elapsed < minLoadingTime) {
+          await new Promise(resolve => setTimeout(resolve, minLoadingTime - elapsed));
+        }
+
       } catch (error) {
         console.error("Error fetching vendor dashboard data:", error);
       } finally {
-        // Ensure minimum loading time to prevent flicker
-        const elapsedTime = Date.now() - startTime;
-        const remainingTime = Math.max(0, minLoadingTime - elapsedTime);
-        
-        if (remainingTime > 0) {
-          await new Promise(resolve => setTimeout(resolve, remainingTime));
-        }
-        
         setLoading(false);
       }
     };
 
+    // CRITICAL FIX: Add dependency on isLoaded and user
     fetchVendorData();
-  }, []);
+  }, [isLoaded, user, isVendor]); // Add proper dependencies
 
   if (loading) {
     return <Loader />;
   }
 
-  return (
-    <div className="px-8 py-10">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <p className="text-heading2-bold">Vendor Dashboard</p>
-          {vendor && (
-            <p className="text-grey-1 mt-1">Welcome back, {vendor.businessName}!</p>
-          )}
+  // Show error state if vendor data couldn't be loaded
+  if (!vendor && isVendor) {
+    return (
+      <div className="px-10 py-5">
+        <div className="text-center py-12">
+          <h2 className="text-xl font-bold text-red-600 mb-4">Unable to Load Vendor Dashboard</h2>
+          <p className="text-gray-600 mb-4">There was an issue loading your vendor information.</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            Refresh Page
+          </button>
         </div>
       </div>
-      
-      <Separator className="bg-grey-1 my-5" />
+    );
+  }
 
-      {/* Main Stats Grid - VENDOR-SPECIFIC DATA */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-10">
+  return (
+    <div className="px-10 py-5">
+      <div className="mb-8">
+        <h1 className="text-heading2-bold">Vendor Dashboard</h1>
+        {vendor && (
+          <p className="text-body-medium text-grey-2">Welcome back, {vendor.businessName}</p>
+        )}
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Platform Revenue</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${vendorStats.vendorEarnings.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              Your share after platform fees
-            </p>
+            <div className="text-2xl font-bold">${totalRevenue.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">Across all vendors</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">My Products</CardTitle>
+            <CardTitle className="text-sm font-medium">Platform Orders</CardTitle>
+            <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalOrders.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">Total platform orders</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Your Products</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{vendorStats.totalProducts}</div>
-            <p className="text-xs text-muted-foreground">
-              Active products in your store
-            </p>
+            <p className="text-xs text-muted-foreground">Active products</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Collections</CardTitle>
-            <Store className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Your Earnings</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{vendorStats.totalCollections}</div>
-            <p className="text-xs text-muted-foreground">
-              Product collections created
-            </p>
+            <div className="text-2xl font-bold text-green-600">${vendorStats.vendorEarnings.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">Your total earnings</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Secondary Stats - PUBLIC PLATFORM DATA */}
-      <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mb-10">
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Platform Customers</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+          <CardHeader>
+            <CardTitle>Manage Products</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalCustomers}</div>
-            <p className="text-xs text-muted-foreground">
-              Total registered customers on the platform
-            </p>
+          <CardContent className="space-y-4">
+            <Link href="/my-products">
+              <Button className="w-full" variant="outline">
+                <Package className="mr-2 h-4 w-4" />
+                View My Products
+              </Button>
+            </Link>
+            <Link href="/my-collections">
+              <Button className="w-full" variant="outline">
+                <Store className="mr-2 h-4 w-4" />
+                Manage Collections
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Orders & Sales</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Link href="/my-orders">
+              <Button className="w-full" variant="outline">
+                <ShoppingBag className="mr-2 h-4 w-4" />
+                View My Orders
+              </Button>
+            </Link>
+            {vendor && (
+              <Link href={`/vendors/${vendor._id}/orders`}>
+                <Button className="w-full" variant="outline">
+                  <ShoppingBag className="mr-2 h-4 w-4" />
+                  Manage Order Status
+                </Button>
+              </Link>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Business</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Link href="/my-social-feed">
+              <Button className="w-full" variant="outline">
+                <Store className="mr-2 h-4 w-4" />
+                Social Feed
+              </Button>
+            </Link>
+            <Button className="w-full" variant="outline">
+              <DollarSign className="mr-2 h-4 w-4" />
+              Analytics (Coming Soon)
+            </Button>
           </CardContent>
         </Card>
       </div>
 
-      {/* Sales Chart - VENDOR'S PERFORMANCE TREND */}
-      <Card className="mt-10">
+      {/* Sales Chart */}
+      <Card>
         <CardHeader>
-          <CardTitle>Platform Growth Trends</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Overall platform activity trends (for market insights)
-          </p>
+          <CardTitle>Platform Sales Performance</CardTitle>
         </CardHeader>
         <CardContent>
           <SalesChart data={salesData} />

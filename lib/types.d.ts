@@ -38,6 +38,21 @@ type VendorType = {
   approvedBy?: string;
   suspendedAt?: Date;
   suspendedReason?: string;
+  
+  // ADDED: Appeal-related properties that were missing
+  appealSubmitted?: boolean;
+  appealReason?: string;
+  appealSubmittedAt?: Date;
+  appealStatus?: "pending" | "approved" | "rejected";
+  appealResponse?: string;
+  appealResponseAt?: Date;
+  appealResponseBy?: string;
+  
+  // ADDED: Additional vendor tracking properties
+  totalOrders?: number;
+  totalRevenue?: number;
+  monthlyRevenue?: Record<string, number>;
+  
   createdAt: Date;
   updatedAt: Date;
 };
