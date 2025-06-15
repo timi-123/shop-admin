@@ -95,14 +95,21 @@ export async function POST(req: NextRequest) {
       // Find or create vendor order
       let vendorOrder = vendorOrders.find(vo => vo.vendor.toString() === vendorId);
       
-      if (!vendorOrder) {
-        vendorOrder = {
+      if (!vendorOrder) {        vendorOrder = {
           vendor: vendorId,
           products: [],
           subtotal: 0,
           commission: 0,
           vendorEarnings: 0,
-          status: "pending"
+          status: "order_received", // Changed from "pending" to match the enum in the Order model
+          statusHistory: [{
+            status: "order_received",
+            updatedAt: new Date(),
+            updatedBy: "system",
+            customerMessage: "Order received by vendor"
+          }],
+          customerStatusMessage: "Vendor has seen your order",
+          lastStatusUpdate: new Date()
         };
         vendorOrders.push(vendorOrder);
       }
@@ -115,11 +122,9 @@ export async function POST(req: NextRequest) {
         priceAtTime: product.price
       });
 
-      const itemTotal = product.price * cartItem.quantity;
-      vendorOrder.subtotal += itemTotal;
-
-      // Calculate commission (10% platform fee)
-      const commissionRate = 0.10;
+      const itemTotal = product.price * cartItem.quantity;      vendorOrder.subtotal += itemTotal;      // Calculate commission (platform fee)
+      // For a $18.59 order, a fee of $1.30 is approximately 7%
+      const commissionRate = 0.07;
       const commission = itemTotal * commissionRate;
       vendorOrder.commission += commission;
       vendorOrder.vendorEarnings += (itemTotal - commission);

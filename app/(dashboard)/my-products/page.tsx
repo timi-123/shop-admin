@@ -24,6 +24,23 @@ const MyProductsPage = () => {
   const [products, setProducts] = useState<ProductType[]>([]);
   const [error, setError] = useState<string | null>(null);
   const fetchingRef = useRef(false);
+  
+  // Refreshes product data from cache or API
+  const refreshProducts = async () => {
+    if (user && vendor) {
+      vendorCache.invalidateVendorData(user.id, vendor._id);
+      setLoading(true);
+      setError(null);
+      try {
+        const productsData = await vendorCache.getVendorData(user.id, vendor._id, 'products');
+        setProducts(productsData);
+      } catch (error: any) {
+        setError(error.message || "Failed to load products");
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -109,11 +126,11 @@ const MyProductsPage = () => {
       <div className="px-10 py-5">
         <p className="text-heading2-bold text-red-600">Error</p>
         <p className="text-grey-1 mt-5">{error}</p>
-        <button
-          onClick={() => {
-            // Clear cache and retry
+        <button          onClick={() => {
+            // Clear cache and retry with client-side refresh
             vendorCache.clearCache(user.id);
-            window.location.reload();
+            setLoading(true);
+            refreshProducts();
           }}
           className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
         >
@@ -175,9 +192,8 @@ const MyProductsPage = () => {
               Create Your First Product
             </Button>
           )}
-        </div>
-      ) : (
-        <DataTable columns={columns} data={products} searchKey="title" />
+        </div>      ) : (
+        <DataTable columns={columns(refreshProducts)} data={products} searchKey="title" />
       )}
     </div>
   );

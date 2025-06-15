@@ -5,8 +5,13 @@ import { ColumnDef } from "@tanstack/react-table";
 import Delete from "../custom ui/Delete";
 import Link from "next/link";
 import { Badge } from "../ui/badge";
+import { useState, useEffect } from "react";
 
-export const columns: ColumnDef<CollectionType>[] = [
+type CollectionColumnProps = {
+  refreshData?: () => void;
+};
+
+export const columns = (refreshData?: () => void): ColumnDef<CollectionType>[] => [
   {
     accessorKey: "title",
     header: "Title",
@@ -55,11 +60,47 @@ export const columns: ColumnDef<CollectionType>[] = [
         <span className="text-gray-400 font-medium">No vendor assigned</span>
       );
     },
-  },
-  {
+  },  {
     accessorKey: "products",
     header: "Products",
-    cell: ({ row }) => <p>{row.original.products.length}</p>,
+    cell: ({ row }) => {
+      // Using product count from collection.products would be inaccurate
+      // Instead, we display the count from products that reference this collection
+      const [productCount, setProductCount] = useState<number | null>(null);
+      const [isLoading, setIsLoading] = useState(true);
+      
+      useEffect(() => {
+        const fetchProductCount = async () => {
+          try {
+            // Only fetch once when component mounts or collection ID changes
+            setIsLoading(true);
+            const res = await fetch(`/api/collections/${row.original._id}/product-count`);
+            
+            if (res.ok) {
+              const data = await res.json();
+              setProductCount(data.count);
+            } else {
+              // Fallback to collection.products.length if API fails
+              setProductCount(Array.isArray(row.original.products) ? row.original.products.length : 0);
+            }
+          } catch (error) {
+            console.error("Error fetching product count:", error);
+            // Fallback to collection.products.length if API fails
+            setProductCount(Array.isArray(row.original.products) ? row.original.products.length : 0);
+          } finally {
+            setIsLoading(false);
+          }
+        };
+        
+        fetchProductCount();
+      }, [row.original._id]);
+      
+      return (
+        <p>
+          {isLoading ? "..." : productCount !== null ? productCount : (Array.isArray(row.original.products) ? row.original.products.length : 0)}
+        </p>
+      );
+    },
   },
   {
     accessorKey: "isActive",
@@ -77,9 +118,22 @@ export const columns: ColumnDef<CollectionType>[] = [
         </Badge>
       );
     },
-  },
-  {
+  },  {
     id: "actions",
-    cell: ({ row }) => <Delete item="collection" id={row.original._id} />,
+    cell: ({ row }) => {
+      // Get the vendor ID from the collection - can be string or object
+      const vendorId = typeof row.original.vendor === 'string' 
+        ? row.original.vendor 
+        : row.original.vendor?._id;
+        
+      return (
+        <Delete 
+          item="collection" 
+          id={row.original._id}
+          vendorId={vendorId}
+          refreshData={refreshData}
+        />
+      );
+    },
   },
 ];

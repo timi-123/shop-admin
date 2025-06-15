@@ -19,9 +19,8 @@ const MyOrdersPage = () => {
   const [vendor, setVendor] = useState<VendorType | null>(null);
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchData = async () => {
+  // Make fetchData accessible at component level for retry button
+  const fetchData = async () => {
       try {
         if (!user || !isVendor) {
           console.log("User not authenticated or not a vendor, staying on page...");
@@ -67,12 +66,13 @@ const MyOrdersPage = () => {
       } catch (error: any) {
         console.error("Error fetching orders:", error);
         setError(error.message || "Failed to load orders");
-        toast.error(error.message || "Failed to load orders");
-      } finally {
+        toast.error(error.message || "Failed to load orders");      } finally {
         setLoading(false);
       }
     };
-
+    
+  // Use effect to call fetchData on component mount
+  useEffect(() => {
     if (user && isVendor) {
       fetchData();
     }
@@ -102,7 +102,7 @@ const MyOrdersPage = () => {
         <p className="text-heading2-bold text-red-600">Error</p>
         <p className="text-grey-1 mt-5">{error}</p>
         <button
-          onClick={() => window.location.reload()}
+          onClick={fetchData}
           className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
         >
           Retry

@@ -66,9 +66,23 @@ export const GET = async (req: NextRequest) => {
       return true;
     });
 
-    console.log(`Collections API: Total ${collections.length}, Store-visible: ${storeCollections.length}`);
+    // Import the utility function for accurate product count
+    const { getCollectionProductCount } = await import("@/lib/utils/getCollectionProductCount");
+    
+    // Add accurate product counts to each collection
+    const collectionsWithCounts = await Promise.all(storeCollections.map(async (collection) => {
+      const productCount = await getCollectionProductCount(collection._id.toString());
+      
+      // Create a response object with accurate product count
+      return {
+        ...collection.toObject(),
+        productCount: productCount !== -1 ? productCount : collection.products?.length || 0
+      };
+    }));
 
-    return NextResponse.json(storeCollections, { 
+    console.log(`Collections API: Total ${collections.length}, Store-visible: ${collectionsWithCounts.length}`);
+
+    return NextResponse.json(collectionsWithCounts, { 
       status: 200, 
       headers: {
         "Access-Control-Allow-Origin": `${process.env.ECOMMERCE_STORE_URL || 'http://localhost:3001'}`,

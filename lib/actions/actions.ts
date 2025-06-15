@@ -45,7 +45,8 @@ export const getCollections = async () => {
   try {
     console.log('Fetching collections from:', `${process.env.NEXT_PUBLIC_API_URL}/collections`);
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/collections`, {
-      cache: 'no-store'
+      cache: 'no-store',
+      next: { revalidate: 0 } // Ensure we always get fresh data
     });
     
     if (!response.ok) {
@@ -55,6 +56,12 @@ export const getCollections = async () => {
     
     const collections = await response.json();
     console.log('Collections fetched:', collections.length);
+    
+    // Log the product counts to help with debugging
+    collections.forEach((collection: any) => {
+      console.log(`Collection "${collection.title}" - Product count: ${collection.productCount || '(not available)'}, Products array length: ${collection.products?.length || 0}`);
+    });
+    
     return collections;
   } catch (error) {
     console.error('Error fetching collections:', error);
@@ -66,7 +73,8 @@ export const getCollectionDetails = async (collectionId: string) => {
   try {
     console.log('Fetching collection details from:', `${process.env.NEXT_PUBLIC_API_URL}/collections/${collectionId}`);
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/collections/${collectionId}`, {
-      cache: 'no-store'
+      cache: 'no-store',
+      next: { revalidate: 0 } // Ensure we always get fresh data
     });
     
     if (!response.ok) {
@@ -75,6 +83,10 @@ export const getCollectionDetails = async (collectionId: string) => {
     }
     
     const collection = await response.json();
+    
+    // Log the product count to help with debugging
+    console.log(`Collection "${collection.title}" details - Product count: ${collection.productCount || '(not available)'}, Products array length: ${collection.products?.length || 0}`);
+    
     return collection;
   } catch (error) {
     console.error('Error fetching collection details:', error);

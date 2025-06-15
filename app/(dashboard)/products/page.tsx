@@ -14,21 +14,25 @@ import { columns } from "@/components/products/ProductColumns";
 const Products = () => {
   const router = useRouter();
 
-  const [loading, setLoading] = useState(true);
-  const [products, setProducts] = useState<ProductType[]>([]);
+  const [loading, setLoading] = useState(true);  const [products, setProducts] = useState<ProductType[]>([]);
 
-  const getProducts = async () => {
+  const refreshProducts = async () => {
+    setLoading(true);
     try {
       const res = await fetch("/api/products", {
         method: "GET",
+        cache: "no-store"
       });
       const data = await res.json();
       setProducts(data);
-      setLoading(false);
     } catch (err) {
       console.log("[products_GET]", err);
+    } finally {
+      setLoading(false);
     }
   };
+  
+  const getProducts = refreshProducts;
 
   useEffect(() => {
     getProducts();
@@ -47,9 +51,8 @@ const Products = () => {
           <Plus className="h-4 w-4 mr-2" />
           Create Product
         </Button>
-      </div>
-      <Separator className="bg-grey-1 my-4" />
-      <DataTable columns={columns} data={products} searchKey="title" />
+      </div>      <Separator className="bg-grey-1 my-4" />
+      <DataTable columns={columns(refreshProducts)} data={products} searchKey="title" />
     </div>
   );
 };

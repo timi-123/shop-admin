@@ -5,6 +5,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useRouter, useParams } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
+import { vendorCache } from "@/lib/services/vendorCache";
 
 import { Separator } from "../ui/separator";
 import { Button } from "@/components/ui/button";
@@ -37,6 +39,7 @@ interface CollectionFormProps {
 const CollectionForm: React.FC<CollectionFormProps> = ({ initialData, vendorId }) => {
   const router = useRouter();
   const params = useParams();
+  const { user } = useUser();
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   
@@ -105,10 +108,15 @@ const CollectionForm: React.FC<CollectionFormProps> = ({ initialData, vendorId }
       if (!res.ok) {
         throw new Error(data.error || "Failed to submit collection");
       }
-      
-      // Set success state
+        // Set success state
       setSubmitSuccess(true);
       toast.success(`Collection ${initialData ? "updated" : "created"} successfully!`);
+      
+      // Invalidate the cache before navigation to ensure fresh data
+      if (user && effectiveVendorId) {
+        console.log("Invalidating vendor data cache");
+        vendorCache.invalidateVendorData(user.id, effectiveVendorId);
+      }
       
       // Wait a moment before redirecting to ensure toast is shown
       setTimeout(() => {

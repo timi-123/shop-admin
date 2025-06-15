@@ -103,20 +103,30 @@ export async function PUT(
         updatedAt: new Date()
       },
       { new: true }
-    ).populate({ path: "collections", model: Collection });
-
-    // Update collections - remove product from old collections
-    if (originalCollections && originalCollections.length > 0) {
+    ).populate({ path: "collections", model: Collection });    // Calculate collection changes instead of removing from all and re-adding    // Find collections to remove the product from (collections that are in original but not in new)
+    const collectionsToRemoveFrom = originalCollections?.filter(
+      (collId: string) => !collections?.includes(collId)
+    ) || [];
+    
+    // Find collections to add the product to (collections that are in new but not in original)
+    const collectionsToAddTo = collections?.filter(
+      (collId: string) => !originalCollections?.includes(collId)
+    ) || [];
+    
+    // Only remove from collections that are no longer associated
+    if (collectionsToRemoveFrom.length > 0) {
+      console.log(`Removing product from ${collectionsToRemoveFrom.length} collections`);
       await Collection.updateMany(
-        { _id: { $in: originalCollections } },
+        { _id: { $in: collectionsToRemoveFrom } },
         { $pull: { products: params.productId } }
       );
     }
 
-    // Add product to new collections
-    if (collections && collections.length > 0) {
+    // Only add to collections that are newly associated
+    if (collectionsToAddTo.length > 0) {
+      console.log(`Adding product to ${collectionsToAddTo.length} collections`);
       await Collection.updateMany(
-        { _id: { $in: collections } },
+        { _id: { $in: collectionsToAddTo } },
         { $addToSet: { products: params.productId } }
       );
     }

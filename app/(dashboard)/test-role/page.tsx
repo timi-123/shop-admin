@@ -43,7 +43,10 @@ const TestRolePage = () => {
                     const response = await fetch("/api/role/update");
                     const data = await response.json();
                     console.log("Update response:", data);
-                    window.location.reload();
+                    // Use client-side update instead of page reload
+                    if (data.role) {
+                        setRoleData(data);
+                    }
                 }}
                 className="mt-4 bg-blue-500 text-white px-4 py-2 rounded"
             >

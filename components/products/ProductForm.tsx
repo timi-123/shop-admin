@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { useRole } from "@/lib/hooks/useRole";
 import toast from "react-hot-toast";
+import { vendorCache } from "@/lib/services/vendorCache";
 
 import { Separator } from "../ui/separator";
 import { Button } from "../ui/button";
@@ -113,10 +114,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
         vendor: effectiveVendorId,
       };
 
-      console.log("Submitting product with body:", requestBody);
-
-      const url = initialData ? `/api/products/${initialData._id}` : "/api/products";
-      const method = initialData ? "POST" : "POST";
+      console.log("Submitting product with body:", requestBody);      const url = initialData ? `/api/products/${initialData._id}` : "/api/products";
+      const method = "POST"; // Both routes use POST method
 
       const response = await fetch(url, {
         method,
@@ -131,8 +130,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
       if (response.ok) {
         const result = await response.json();
         console.log("Product saved successfully:", result);
+          toast.success(`Product ${initialData ? "updated" : "created"} successfully!`);
         
-        toast.success(`Product ${initialData ? "updated" : "created"} successfully!`);
+        // Invalidate the cache before navigation to ensure fresh data
+        if (user && effectiveVendorId) {
+          console.log("Invalidating vendor data cache");
+          vendorCache.invalidateVendorData(user.id, effectiveVendorId);
+        }
         
         // Navigate after successful submission
         const redirectUrl = isAdmin 
@@ -250,7 +254,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
       )}
       
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} onKeyDown={handleKeyPress}>
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          form.handleSubmit(onSubmit)(e);
+        }} onKeyDown={handleKeyPress}>
           <FormField
             control={form.control}
             name="title"

@@ -7,10 +7,13 @@ import Vendor from "@/lib/models/Vendor";
 import { auth } from "@clerk/nextjs";
 import { createDemoSocialPosts } from "@/lib/utils/socialPost";
 
+// Ensure this API route always returns fresh data without caching
+export const dynamic = "force-dynamic";
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { vendorId: string } }
-) {
+){
   try {
     const { userId } = auth();
     
@@ -104,19 +107,17 @@ export async function POST(
     // Generate demo social posts for Instagram and Facebook
     await createDemoSocialPosts(newProduct, vendor);
 
-    console.log(`Product created with ID: ${newProduct._id}`);
-
-    // Update collections with the new product
+    console.log(`Product created with ID: ${newProduct._id}`);    // Update collections with the new product
     if (collections && collections.length > 0) {
-      console.log(`Updating collections with the new product`);
-      for (const collectionId of collections) {
-        const collection = await Collection.findById(collectionId);
-        if (collection) {
-          collection.products.push(newProduct._id);
-          await collection.save();
-          console.log(`Added product to collection: ${collectionId}`);
-        }
-      }
+      console.log(`Adding new product ${newProduct._id} to ${collections.length} collections`);
+      
+      // Use updateMany with $addToSet to efficiently update collections and prevent duplicates
+      await Collection.updateMany(
+        { _id: { $in: collections } },
+        { $addToSet: { products: newProduct._id } }
+      );
+      
+      console.log(`Successfully added product to ${collections.length} collections`);
     }
 
     console.log(`Product created successfully: ${newProduct._id}`);

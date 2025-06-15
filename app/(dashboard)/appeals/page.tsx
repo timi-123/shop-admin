@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRole } from "@/lib/hooks/useRole";
 import { DataTable } from "@/components/custom ui/DataTable";
-import { appealColumns } from "@/components/appeals/AppealColumns";
+import { getAppealColumns } from "@/components/appeals/AppealColumns";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,44 +20,50 @@ const AppealsPage = () => {
     pendingAppeals: 0,
     respondedAppeals: 0,
   });
-
-  useEffect(() => {
+  const fetchAppeals = async () => {
     if (!isAdmin) return;
     
-    const fetchAppeals = async () => {
-      try {
-        const res = await fetch("/api/appeals");
-        const data = await res.json();
-        
-        setAppeals(data);
-        
-        // Calculate stats
-        const pendingCount = data.filter((vendor: VendorType) => 
-          vendor.appealSubmitted && !vendor.appealResponse
-        ).length;
-        
-        const respondedCount = data.filter((vendor: VendorType) => 
-          vendor.appealResponse
-        ).length;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/appeals", {
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await res.json();
+      
+      setAppeals(data);
+      
+      // Calculate stats
+      const pendingCount = data.filter((vendor: VendorType) => 
+        vendor.appealSubmitted && !vendor.appealResponse
+      ).length;
+      
+      const respondedCount = data.filter((vendor: VendorType) => 
+        vendor.appealResponse
+      ).length;
 
-        const totalWithAppeals = data.filter((vendor: VendorType) => 
-          vendor.appealSubmitted || vendor.appealResponse
-        ).length;
-        
-        setStats({
-          totalAppeals: totalWithAppeals,
-          pendingAppeals: pendingCount,
-          respondedAppeals: respondedCount,
-        });
-        
-        setLoading(false);
-      } catch (error) {
-        console.error("Error fetching appeals:", error);
-        setLoading(false);
-      }
-    };
+      const totalWithAppeals = data.filter((vendor: VendorType) => 
+        vendor.appealSubmitted || vendor.appealResponse
+      ).length;
+      
+      setStats({
+        totalAppeals: totalWithAppeals,
+        pendingAppeals: pendingCount,
+        respondedAppeals: respondedCount,
+      });
+    } catch (error) {
+      console.error("Error fetching appeals:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchAppeals();
+  useEffect(() => {
+    if (isAdmin) {
+      fetchAppeals();
+    }
   }, [isAdmin]);
 
   if (loading) return <Loader />;
@@ -142,7 +148,7 @@ const AppealsPage = () => {
             </Badge>
           </div>
           <DataTable 
-            columns={appealColumns} 
+            columns={getAppealColumns(fetchAppeals)} 
             data={appeals} 
             searchKey="businessName"
           />

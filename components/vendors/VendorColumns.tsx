@@ -9,7 +9,8 @@ import { Eye, CheckCircle, XCircle, Ban, RotateCcw } from "lucide-react";
 import SuspensionDialog from "./SuspensionDialog";
 import AppealResponseDialog from "./AppealResponseDialog";
 
-export const vendorColumns: ColumnDef<VendorType>[] = [
+// Add refreshData prop to use for callbacks instead of page reloads
+export const getVendorColumns = (refreshData: () => void): ColumnDef<VendorType>[] => [
   {
     accessorKey: "businessName",
     header: "Business Name",
@@ -72,10 +73,6 @@ export const vendorColumns: ColumnDef<VendorType>[] = [
     cell: ({ row }) => {
       const vendor = row.original;
       
-      const handleRefresh = () => {
-        window.location.reload();
-      };
-      
       return (
         <div className="flex gap-2">
           <Link href={`/vendors/${vendor._id}`}>
@@ -93,7 +90,7 @@ export const vendorColumns: ColumnDef<VendorType>[] = [
                 onClick={() => {
                   fetch(`/api/vendors/${vendor._id}/approve`, {
                     method: "POST",
-                  }).then(() => window.location.reload());
+                  }).then(() => refreshData());
                 }}
               >
                 <CheckCircle className="h-4 w-4 text-green-600" />
@@ -110,7 +107,7 @@ export const vendorColumns: ColumnDef<VendorType>[] = [
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ reason }),
-                    }).then(() => window.location.reload());
+                    }).then(() => refreshData());
                   }
                 }}
               >
@@ -120,14 +117,14 @@ export const vendorColumns: ColumnDef<VendorType>[] = [
           )}
           
           {vendor.status === "approved" && (
-            <SuspensionDialog vendor={vendor} onSuspensionComplete={handleRefresh} />
+            <SuspensionDialog vendor={vendor} onSuspensionComplete={refreshData} />
           )}
           
           {vendor.status === "suspended" && (
             <>
               {/* Only show appeal response dialog if there's an appeal submitted and no response yet */}
               {vendor.appealSubmitted && !vendor.appealResponse && (
-                <AppealResponseDialog vendor={vendor} onResponseSent={handleRefresh} />
+                <AppealResponseDialog vendor={vendor} onResponseSent={refreshData} />
               )}
               
               <Button
@@ -137,7 +134,7 @@ export const vendorColumns: ColumnDef<VendorType>[] = [
                 onClick={() => {
                   fetch(`/api/vendors/${vendor._id}/unsuspend`, {
                     method: "POST",
-                  }).then(() => window.location.reload());
+                  }).then(() => refreshData());
                 }}
               >
                 <RotateCcw className="h-4 w-4 text-green-600" />

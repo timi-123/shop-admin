@@ -25,8 +25,33 @@ export async function GET(req: NextRequest) {
         console.log("DB connected successfully");
 
         // Try to find existing role
-        let role = await Role.findOne({ clerkId: userId });
-        console.log("Existing role found:", role?.role || "none");
+        let role = await Role.findOne({ clerkId: userId });        console.log("Existing role found:", role?.role || "none");
+
+        // If existing role is 'vendor', verify that a vendor record exists
+        if (role && role.role === "vendor") {
+            console.log("Verifying vendor record exists");
+            try {
+                // Import Vendor model dynamically to avoid circular dependencies
+                const Vendor = (await import("@/lib/models/Vendor")).default;
+                const vendorExists = await Vendor.exists({ clerkId: userId });
+                
+                if (!vendorExists) {
+                    console.log("WARNING: User has vendor role but no vendor record exists!");
+                    console.log("Resetting role to 'user'");
+                    
+                    // Update role to user since vendor record doesn't exist
+                    role.role = "user";
+                    await role.save();
+                    
+                    return NextResponse.json({ role: "user" }, { status: 200 });
+                } else {
+                    console.log("Vendor record verified");
+                }
+            } catch (vendorError) {
+                console.error("Error checking vendor record:", vendorError);
+                // Continue with existing role if there's an error checking
+            }
+        }
 
         if (!role) {
             console.log("No role found, creating new one...");

@@ -6,7 +6,11 @@ import Delete from "../custom ui/Delete";
 import Link from "next/link";
 import { Badge } from "../ui/badge";
 
-export const columns: ColumnDef<ProductType>[] = [
+type ProductColumnProps = {
+  refreshData?: () => void;
+};
+
+export const columns = (refreshData?: () => void): ColumnDef<ProductType>[] => [
   {
     accessorKey: "title",
     header: "Title",
@@ -81,9 +85,22 @@ export const columns: ColumnDef<ProductType>[] = [
         </Badge>
       );
     },
-  },
-  {
+  },  {
     id: "actions",
-    cell: ({ row }) => <Delete item="product" id={row.original._id} />,
+    cell: ({ row }) => {
+      // Get the vendor ID from the product - can be string or object
+      const vendorId = typeof row.original.vendor === 'string' 
+        ? row.original.vendor 
+        : row.original.vendor?._id;
+      
+      return (
+        <Delete 
+          item="product" 
+          id={row.original._id}
+          vendorId={vendorId} 
+          refreshData={refreshData}
+        />
+      );
+    },
   },
 ];

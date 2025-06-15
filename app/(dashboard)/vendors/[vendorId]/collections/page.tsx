@@ -15,10 +15,32 @@ import Link from "next/link";
 const VendorCollectionsPage = () => {
   const router = useRouter();
   const params = useParams();
-  const { role, isAdmin, isVendor } = useRole();
-  const [loading, setLoading] = useState(true);
+  const { role, isAdmin, isVendor } = useRole();  const [loading, setLoading] = useState(true);
   const [collections, setCollections] = useState<CollectionType[]>([]);
   const [vendor, setVendor] = useState<VendorType | null>(null);
+  
+  const refreshCollections = async () => {
+    if (!params.vendorId) return;
+    
+    try {
+      setLoading(true);
+      // Get vendor collections
+      const collectionsRes = await fetch(`/api/vendors/${params.vendorId}/collections`, {
+        cache: "no-store"
+      });
+      
+      if (!collectionsRes.ok) {
+        throw new Error("Failed to fetch collections");
+      }
+      
+      const collectionsData = await collectionsRes.json();
+      setCollections(collectionsData);
+    } catch (error) {
+      console.error("Error refreshing collections:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -88,11 +110,10 @@ const VendorCollectionsPage = () => {
         </Link>
       </div>
       <Separator className="bg-grey-1 my-4" />
-      
-      {collections.length === 0 ? (
+        {collections.length === 0 ? (
         <p className="text-grey-1">No collections found for this vendor.</p>
       ) : (
-        <DataTable columns={columns} data={collections} searchKey="title" />
+        <DataTable columns={columns(refreshCollections)} data={collections} searchKey="title" />
       )}
     </div>
   );

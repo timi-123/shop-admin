@@ -8,7 +8,7 @@ import Link from "next/link";
 import { Eye, MessageSquare, Clock, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import AppealResponseDialog from "../vendors/AppealResponseDialog";
 
-export const appealColumns: ColumnDef<VendorType>[] = [
+export const getAppealColumns = (refreshData: () => void): ColumnDef<VendorType>[] => [
   {
     accessorKey: "businessName",
     header: "Business Name",
@@ -98,9 +98,8 @@ export const appealColumns: ColumnDef<VendorType>[] = [
     header: "Actions",
     cell: ({ row }) => {
       const vendor = row.original;
-      
-      const handleRefresh = () => {
-        window.location.reload();
+        const handleRefresh = () => {
+        refreshData();
       };
       
       return (

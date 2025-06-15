@@ -22,9 +22,7 @@ const RoleGuard = ({
     const pathname = usePathname();
     const { role, loading: roleLoading } = useRole();
     const [initialLoad, setInitialLoad] = useState(true);
-    const [redirecting, setRedirecting] = useState(false);
-
-    useEffect(() => {
+    const [redirecting, setRedirecting] = useState(false);    useEffect(() => {
         // Only proceed when both user and role are fully loaded
         if (isLoaded && !roleLoading && role !== null) {
             const timer = setTimeout(() => {
@@ -44,6 +42,31 @@ const RoleGuard = ({
                         router.push("/vendor-application");
                         return;
                     }
+                }
+                
+                // Handle case where user claims to be vendor but might not be
+                if (user && role === "vendor" && !pathname?.includes("/vendor-application")) {
+                    // Verify vendor status to handle cases where vendor was deleted but role cache persists
+                    const checkVendorStatus = async () => {
+                        try {
+                            const res = await fetch("/api/vendors/my-vendor", {
+                                headers: {'Cache-Control': 'no-cache'}
+                            });
+                            
+                            // If vendor record doesn't exist but role says vendor, clear cache and redirect
+                            if (!res.ok) {
+                                console.log("Vendor role but no vendor record - redirecting to application");
+                                localStorage.removeItem(`role_${user.id}`);
+                                localStorage.removeItem(`role_cache_time_${user.id}`);
+                                setRedirecting(true);
+                                router.push("/vendor-application");
+                            }
+                        } catch (error) {
+                            console.error("Error checking vendor status in RoleGuard:", error);
+                        }
+                    };
+                    
+                    checkVendorStatus();
                 }
             }, 200); // Small delay to ensure smooth loading
 

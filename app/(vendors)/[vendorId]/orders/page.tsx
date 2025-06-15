@@ -177,7 +177,10 @@ const VendorOrdersManagement = () => {
             <p className="text-sm text-gray-500">Current status: {order.status}</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit(e);
+          }} className="space-y-4">
             {/* Status Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

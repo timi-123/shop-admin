@@ -3,7 +3,7 @@ class VendorCacheService {
   private cache = new Map<string, any>();
   private cacheTime = new Map<string, number>();
   private pendingRequests = new Map<string, Promise<any>>();
-  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  private readonly CACHE_DURATION = 30 * 1000; // Reduced to 30 seconds for more frequent refreshes
 
   private getCacheKey(userId: string, type: 'vendor' | 'products' | 'collections' | 'orders', vendorId?: string): string {
     if (type === 'vendor') {

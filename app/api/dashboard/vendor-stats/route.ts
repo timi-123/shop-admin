@@ -57,12 +57,9 @@ export async function GET(req: NextRequest) {
             }
           }
         }
-      }
-    ]);
-
-    // Calculate vendor earnings after platform commission (85% to vendor, 15% to platform)
+      }    ]);    // Calculate vendor earnings after platform commission (93% to vendor, 7% to platform)
     const grossEarnings = vendorEarnings[0]?.totalEarnings || 0;
-    const netEarnings = grossEarnings * 0.85; // 85% goes to vendor
+    const netEarnings = grossEarnings * 0.93; // 93% goes to vendor (7% platform fee)
 
     // Count orders containing vendor's products
     const ordersWithVendorProducts = await Order.countDocuments({

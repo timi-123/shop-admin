@@ -111,7 +111,10 @@ const VendorApplicationForm = () => {
       <Separator className="bg-grey-1 mb-7" />
       
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          form.handleSubmit(onSubmit)(e);
+        }} className="space-y-8">
           {/* Business Information */}
           <div>
             <h2 className="text-heading3-bold mb-4">Business Information</h2>

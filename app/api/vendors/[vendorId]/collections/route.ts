@@ -9,6 +9,7 @@ import Product from "@/lib/models/Product";
 
 // app/api/vendors/[vendorId]/collections/route.ts
 // Only updating the GET method for better error handling
+// Using force-dynamic (declared at end of file) to ensure fresh data always
 
 export async function GET(
   req: NextRequest,

@@ -15,9 +15,7 @@ export const POST = async (req: NextRequest) => {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    await connectToDB();
-
-    const {
+    await connectToDB();    const {
       title,
       description,
       media,
@@ -25,9 +23,11 @@ export const POST = async (req: NextRequest) => {
       sizes,
       colors,
       price,
+      vendor,
+      stockQuantity
     } = await req.json();
 
-    if (!title || !description || !media || !price) {
+    if (!title || !description || !media || !price || !vendor) {
       return new NextResponse("Not enough data to create a product", {
         status: 400,
       });
@@ -41,18 +41,20 @@ export const POST = async (req: NextRequest) => {
       sizes,
       colors,
       price,
+      vendor,
+      stockQuantity: stockQuantity || 0
     });
 
-    await newProduct.save();
-
-    if (collections) {
-      for (const collectionId of collections) {
-        const collection = await Collection.findById(collectionId);
-        if (collection) {
-          collection.products.push(newProduct._id);
-          await collection.save();
-        }
-      }
+    await newProduct.save();    if (collections && collections.length > 0) {
+      console.log(`Adding new product ${newProduct._id} to ${collections.length} collections`);
+      
+      // Use updateMany with $addToSet to efficiently update collections and prevent duplicates
+      await Collection.updateMany(
+        { _id: { $in: collections } },
+        { $addToSet: { products: newProduct._id } }
+      );
+      
+      console.log(`Successfully added product to ${collections.length} collections`);
     }
 
     return NextResponse.json(newProduct, { status: 200 });

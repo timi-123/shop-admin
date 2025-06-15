@@ -1,12 +1,12 @@
 {
   "name": "shopgram_admin",
   "version": "0.1.0",
-  "private": true,
-  "scripts": {
+  "private": true,  "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "fix:collection-counts": "node scripts/fix_collection_product_counts.js"
   },
   "dependencies": {
     "@clerk/nextjs": "^4.29.7",

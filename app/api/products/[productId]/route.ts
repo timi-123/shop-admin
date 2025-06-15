@@ -69,9 +69,7 @@ export const POST = async (
         JSON.stringify({ message: "Product not found" }),
         { status: 404 }
       );
-    }
-
-    const {
+    }    const {
       title,
       description,
       media,
@@ -82,15 +80,15 @@ export const POST = async (
       colors,
       price,
       expense,
+      vendor,
+      stockQuantity
     } = await req.json();
 
-    if (!title || !description || !media || !category || !price || !expense) {
-      return new NextResponse("Not enough data to create a new product", {
+    if (!title || !description || !media || !price) {
+      return new NextResponse("Not enough data to update the product", {
         status: 400,
       });
-    }
-
-    const addedCollections = collections.filter(
+    }    const addedCollections = collections.filter(
       (collectionId: string) => !product.collections.includes(collectionId)
     );
     // included in new data, but not included in the previous data
@@ -100,12 +98,17 @@ export const POST = async (
     );
     // included in previous data, but not included in the new data
 
+    console.log(`Updating collections for product ${product._id}:`);
+    console.log(`- Added to ${addedCollections.length} new collections`);
+    console.log(`- Removed from ${removedCollections.length} previous collections`);
+    console.log(`- Unchanged in ${collections.length - addedCollections.length} collections`);
+
     // Update collections
     await Promise.all([
       // Update added collections with this product
       ...addedCollections.map((collectionId: string) =>
         Collection.findByIdAndUpdate(collectionId, {
-          $push: { products: product._id },
+          $addToSet: { products: product._id }, // Use addToSet instead of push to prevent duplicates
         })
       ),
 
@@ -115,9 +118,7 @@ export const POST = async (
           $pull: { products: product._id },
         })
       ),
-    ]);
-
-    // Update product
+    ]);// Update product
     const updatedProduct = await Product.findByIdAndUpdate(
       product._id,
       {
@@ -131,6 +132,10 @@ export const POST = async (
         colors,
         price,
         expense,
+        // Keep the vendor field even if not provided in the update
+        ...(vendor && { vendor }),
+        // Include stockQuantity in the update
+        ...(typeof stockQuantity === 'number' && { stockQuantity })
       },
       { new: true }
     ).populate({ path: "collections", model: Collection });

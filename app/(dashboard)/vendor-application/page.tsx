@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { useRole } from "@/lib/hooks/useRole";
 import VendorApplicationForm from "@/components/vendors/VendorApplicationForm";
 import Loader from "@/components/custom ui/Loader";
+import Link from "next/link";
 
 const VendorApplicationPage = () => {
   const { user, isLoaded } = useUser();
@@ -89,11 +90,57 @@ const VendorApplicationPage = () => {
               Your application is being reviewed. We'll notify you once a decision is made.
             </p>
           )}
-          
-          {existingApplication.status === "approved" && (
-            <p className="text-body-medium text-green-600 mt-4">
-              Congratulations! Your vendor application has been approved. You can now start adding products.
-            </p>
+            {existingApplication.status === "approved" && (
+            <div className="mt-4 space-y-4">
+              <p className="text-body-medium text-green-600">
+                Congratulations! Your vendor application has been approved. You can now start adding products.
+              </p>
+              
+              <div className="flex flex-col space-y-3">
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch("/api/debug/set-vendor-role", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" }
+                      });
+                      
+                      if (res.ok) {
+                        // Clear cached role
+                        if (user?.id) {
+                          localStorage.removeItem(`role_${user.id}`);
+                          localStorage.removeItem(`lastRoleFetch_${user.id}`);
+                          localStorage.removeItem(`role_cache_time_${user.id}`);
+                        }
+                        
+                        // Force refresh
+                        window.location.href = "/?roleFixed=true";
+                      } else {
+                        const error = await res.text();
+                        alert("Error fixing role: " + error);
+                      }
+                    } catch (error) {
+                      console.error("Error fixing role:", error);
+                      alert("Error fixing role. Check console for details.");
+                    }
+                  }}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                >
+                  Fix My Vendor Access
+                </button>
+                  <Link href="/?fixRole=true" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-center">
+                  Fix My Role & Access Dashboard
+                </Link>
+                
+                <Link href="/my-products/new" className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-center">
+                  Add New Product
+                </Link>
+                
+                <Link href="/my-collections/new" className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors text-center">
+                  Create New Collection
+                </Link>
+              </div>
+            </div>
           )}
         </div>
       </div>

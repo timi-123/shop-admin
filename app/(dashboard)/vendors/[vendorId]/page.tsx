@@ -178,14 +178,12 @@ const VendorDetailPage = () => {
             <div className="text-2xl font-bold">{stats.totalCollections}</div>
           </CardContent>
         </Card>
-      </div>
-
-      <Tabs defaultValue="details" className="w-full">
-        <TabsList>
-          <TabsTrigger value="details">Business Details</TabsTrigger>
-          <TabsTrigger value="products">Products</TabsTrigger>
-          <TabsTrigger value="collections">Collections</TabsTrigger>
-          <TabsTrigger value="orders">Orders</TabsTrigger>
+      </div>      <Tabs defaultValue="details" className="w-full">
+        <TabsList className="mb-2">
+          <TabsTrigger value="details" type="button">Business Details</TabsTrigger>
+          <TabsTrigger value="products" type="button">Products</TabsTrigger>
+          <TabsTrigger value="collections" type="button">Collections</TabsTrigger>
+          <TabsTrigger value="orders" type="button">Orders</TabsTrigger>
         </TabsList>
         
         <TabsContent value="details">

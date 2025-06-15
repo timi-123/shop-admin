@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRole } from "@/lib/hooks/useRole";
 import { DataTable } from "@/components/custom ui/DataTable";
-import { vendorColumns } from "@/components/vendors/VendorColumns";
+import { getVendorColumns } from "@/components/vendors/VendorColumns";
 import { Separator } from "@/components/ui/separator";
 import Loader from "@/components/custom ui/Loader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,27 +16,34 @@ const VendorsPage = () => {
   const [pendingVendors, setPendingVendors] = useState<VendorType[]>([]);
   const [approvedVendors, setApprovedVendors] = useState<VendorType[]>([]);
   const [suspendedVendors, setSuspendedVendors] = useState<VendorType[]>([]);
-
-  useEffect(() => {
+  const fetchVendors = async () => {
     if (!isAdmin) return;
     
-    const fetchVendors = async () => {
-      try {
-        const res = await fetch("/api/vendors");
-        const data = await res.json();
-        
-        setVendors(data);
-        setPendingVendors(data.filter((v: VendorType) => v.status === "pending"));
-        setApprovedVendors(data.filter((v: VendorType) => v.status === "approved"));
-        setSuspendedVendors(data.filter((v: VendorType) => v.status === "suspended"));
-        setLoading(false);
-      } catch (error) {
-        console.error("Error fetching vendors:", error);
-        setLoading(false);
-      }
-    };
+    setLoading(true);
+    try {
+      const res = await fetch("/api/vendors", {
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await res.json();
+      
+      setVendors(data);
+      setPendingVendors(data.filter((v: VendorType) => v.status === "pending"));
+      setApprovedVendors(data.filter((v: VendorType) => v.status === "approved"));
+      setSuspendedVendors(data.filter((v: VendorType) => v.status === "suspended"));
+    } catch (error) {
+      console.error("Error fetching vendors:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchVendors();
+  useEffect(() => {
+    if (isAdmin) {
+      fetchVendors();
+    }
   }, [isAdmin]);
 
   if (loading) return <Loader />;
@@ -54,26 +61,24 @@ const VendorsPage = () => {
     <div className="px-10 py-5">
       <p className="text-heading2-bold">Vendor Management</p>
       <Separator className="bg-grey-1 my-5" />
-      
-      <Tabs defaultValue="pending" className="w-full">
-        <TabsList>
-          <TabsTrigger value="pending">
+        <Tabs defaultValue="pending" className="w-full">
+        <TabsList className="mb-2">
+          <TabsTrigger value="pending" type="button">
             Pending ({pendingVendors.length})
           </TabsTrigger>
-          <TabsTrigger value="approved">
+          <TabsTrigger value="approved" type="button">
             Approved ({approvedVendors.length})
           </TabsTrigger>
-          <TabsTrigger value="suspended">
+          <TabsTrigger value="suspended" type="button">
             Suspended ({suspendedVendors.length})
           </TabsTrigger>
-          <TabsTrigger value="all">
+          <TabsTrigger value="all" type="button">
             All Vendors ({vendors.length})
           </TabsTrigger>
         </TabsList>
-        
-        <TabsContent value="pending">
+          <TabsContent value="pending">
           <DataTable 
-            columns={vendorColumns} 
+            columns={getVendorColumns(fetchVendors)} 
             data={pendingVendors} 
             searchKey="businessName"
           />
@@ -81,7 +86,7 @@ const VendorsPage = () => {
         
         <TabsContent value="approved">
           <DataTable 
-            columns={vendorColumns} 
+            columns={getVendorColumns(fetchVendors)} 
             data={approvedVendors} 
             searchKey="businessName"
           />
@@ -89,7 +94,7 @@ const VendorsPage = () => {
         
         <TabsContent value="suspended">
           <DataTable 
-            columns={vendorColumns} 
+            columns={getVendorColumns(fetchVendors)} 
             data={suspendedVendors} 
             searchKey="businessName"
           />
@@ -97,7 +102,7 @@ const VendorsPage = () => {
         
         <TabsContent value="all">
           <DataTable 
-            columns={vendorColumns} 
+            columns={getVendorColumns(fetchVendors)} 
             data={vendors} 
             searchKey="businessName"
           />

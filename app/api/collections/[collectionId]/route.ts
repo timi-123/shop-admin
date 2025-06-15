@@ -12,7 +12,16 @@ export const GET = async (
   try {
     await connectToDB();
 
-    const collection = await Collection.findById(params.collectionId).populate({ path: "products", model: Product });
+    // Find the collection and populate vendor information
+    const collection = await Collection.findById(params.collectionId)
+      .populate({ 
+        path: "vendor", 
+        select: "businessName email _id status"
+      })
+      .populate({ 
+        path: "products", 
+        model: Product 
+      });
 
     if (!collection) {
       return new NextResponse(
@@ -21,7 +30,22 @@ export const GET = async (
       );
     }
 
-    return NextResponse.json(collection, { 
+    // Import the utility function for accurate product count
+    const { getCollectionProductCount } = await import("@/lib/utils/getCollectionProductCount");
+    
+    // Get the accurate product count
+    const productCount = await getCollectionProductCount(params.collectionId);
+    
+    // Create a response object with the collection data and accurate product count
+    const collectionResponse = {
+      ...collection.toObject(),
+      productCount: productCount !== -1 ? productCount : collection.products?.length || 0 // Fallback to products array length
+    };
+
+    // Add logging to diagnose the issue
+    console.log(`Collection ${params.collectionId} product count: API=${productCount}, Collection array=${collection.products?.length || 0}`);
+
+    return NextResponse.json(collectionResponse, { 
       status: 200,
       headers: {
         "Access-Control-Allow-Origin": `${process.env.ECOMMERCE_STORE_URL || 'http://localhost:3001'}`,

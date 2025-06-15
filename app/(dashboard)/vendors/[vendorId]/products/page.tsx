@@ -15,10 +15,32 @@ import Link from "next/link";
 const VendorProductsPage = () => {
   const router = useRouter();
   const params = useParams();
-  const { role, isAdmin, isVendor } = useRole();
-  const [loading, setLoading] = useState(true);
+  const { role, isAdmin, isVendor } = useRole();  const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<ProductType[]>([]);
   const [vendor, setVendor] = useState<VendorType | null>(null);
+  
+  const refreshProducts = async () => {
+    if (!params.vendorId) return;
+    
+    try {
+      setLoading(true);
+      // Get vendor products
+      const productsRes = await fetch(`/api/vendors/${params.vendorId}/products`, {
+        cache: "no-store"
+      });
+      
+      if (!productsRes.ok) {
+        throw new Error("Failed to fetch products");
+      }
+      
+      const productsData = await productsRes.json();
+      setProducts(productsData);
+    } catch (error) {
+      console.error("Error refreshing products:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -88,11 +110,10 @@ const VendorProductsPage = () => {
         </Link>
       </div>
       <Separator className="bg-grey-1 my-4" />
-      
-      {products.length === 0 ? (
+        {products.length === 0 ? (
         <p className="text-grey-1">No products found for this vendor.</p>
       ) : (
-        <DataTable columns={columns} data={products} searchKey="title" />
+        <DataTable columns={columns(refreshProducts)} data={products} searchKey="title" />
       )}
     </div>
   );

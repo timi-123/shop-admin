@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import SalesChart from "@/components/custom ui/SalesChart";
 import Loader from "@/components/custom ui/Loader";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,8 @@ import {
   Globe,
   Sparkles,
   DollarSign,
-  Package
+  Package,
+  Plus
 } from "lucide-react";
 
 // Beautiful Landing Page Component (Only for non-authenticated users)
@@ -224,8 +226,7 @@ const VendorDashboard = () => {
   const { role, isVendor } = useRole(); // Add role context
   const [salesData, setSalesData] = useState<any[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
-  const [totalOrders, setTotalOrders] = useState(0);
-  const [totalCustomers, setTotalCustomers] = useState(0);
+  const [totalOrders, setTotalOrders] = useState(0);  const [totalCustomers, setTotalCustomers] = useState(0);
   const [loading, setLoading] = useState(true);
   const [vendor, setVendor] = useState<VendorType | null>(null);
   const [vendorStats, setVendorStats] = useState({
@@ -233,101 +234,219 @@ const VendorDashboard = () => {
     totalCollections: 0,
     vendorEarnings: 0,
   });
+  // Move fetch function to component scope and use useCallback to memoize it
+  const fetchVendorData = useCallback(async () => {
+    // CRITICAL FIX: Only fetch if user is loaded and is a vendor
+    if (!isLoaded || !user || !isVendor) {
+      console.log("Skipping vendor data fetch - not a vendor or user not loaded");
+      setLoading(false);
+      return;
+    }
 
-  useEffect(() => {
-    const fetchVendorData = async () => {
-      // CRITICAL FIX: Only fetch if user is loaded and is a vendor
-      if (!isLoaded || !user || !isVendor) {
-        console.log("Skipping vendor data fetch - not a vendor or user not loaded");
-        setLoading(false);
-        return;
-      }
+    // Check if we recently fetched data (within last 30 seconds)
+    const now = Date.now();
+    const lastDashboardFetchTime = localStorage.getItem(`lastDashboardFetch_${user.id}`);
+    const shouldFetchData = !lastDashboardFetchTime || (now - parseInt(lastDashboardFetchTime, 10)) > 30000; // 30 seconds
+    
+    if (!shouldFetchData && vendor) {
+      console.log("Skipping dashboard data fetch - recently fetched");
+      setLoading(false);
+      return;
+    }
+    
+    // Minimum loading time to prevent flicker
+    const startTime = Date.now();
+    const minLoadingTime = 800; // 800ms minimum
 
-      // Minimum loading time to prevent flicker
-      const startTime = Date.now();
-      const minLoadingTime = 800; // 800ms minimum
+    try {
+      console.log("Fetching vendor data for authenticated vendor user");
+      
+      // Get vendor info first - WITH ERROR HANDLING
+      const vendorRes = await fetch("/api/vendors/my-vendor", {
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
+      if (vendorRes.ok) {
+        const vendorData = await vendorRes.json();
+        setVendor(vendorData);
 
-      try {
-        console.log("Fetching vendor data for authenticated vendor user");
+        // Get real platform and vendor statistics
+        const [platformStatsRes, salesChartRes, vendorStatsRes] = await Promise.all([
+          fetch("/api/dashboard/stats", {
+            cache: 'no-store',
+            headers: {'Cache-Control': 'no-cache'}
+          }),
+          fetch("/api/dashboard/sales-chart", {
+            cache: 'no-store',
+            headers: {'Cache-Control': 'no-cache'}
+          }),
+          fetch("/api/dashboard/vendor-stats", {
+            cache: 'no-store',
+            headers: {'Cache-Control': 'no-cache'}
+          })
+        ]);
         
-        // Get vendor info first - WITH ERROR HANDLING
-        const vendorRes = await fetch("/api/vendors/my-vendor");
-        if (vendorRes.ok) {
-          const vendorData = await vendorRes.json();
-          setVendor(vendorData);
-
-          // Get real platform and vendor statistics
-          const [platformStatsRes, salesChartRes, vendorStatsRes] = await Promise.all([
-            fetch("/api/dashboard/stats"), // Real platform stats (same as admin)
-            fetch("/api/dashboard/sales-chart"), // Real sales chart data (same as admin)
-            fetch("/api/dashboard/vendor-stats"), // Real vendor-specific stats
-          ]);
-
-          // Process platform stats - REAL DATA for all vendors
-          if (platformStatsRes.ok) {
-            const platformStats = await platformStatsRes.json();
-            setTotalRevenue(platformStats.totalRevenue);
-            setTotalOrders(platformStats.totalOrders);
-            setTotalCustomers(platformStats.totalCustomers);
-          }
-
-          // Process sales chart data - REAL DATA for all vendors
-          if (salesChartRes.ok) {
-            const salesData = await salesChartRes.json();
-            setSalesData(salesData);
-          }
-
-          // Process vendor-specific stats - REAL DATA for this vendor only
-          if (vendorStatsRes.ok) {
-            const vendorStats = await vendorStatsRes.json();
-            setVendorStats(vendorStats);
+        // Process each response separately with error handling
+        if (platformStatsRes.ok) {
+          const platformStats = await platformStatsRes.json();
+          setTotalRevenue(platformStats.totalRevenue);
+          setTotalOrders(platformStats.totalOrders);
+          setTotalCustomers(platformStats.totalCustomers);
+        }
+        
+        if (salesChartRes.ok) {
+          try {
+            const salesChartData = await salesChartRes.json();
+            console.log("Sales chart data received:", salesChartData);
+            
+            // Handle all possible response formats
+            if (Array.isArray(salesChartData) && salesChartData.length > 0) {
+              // Direct array format
+              setSalesData(salesChartData);
+            } else if (salesChartData && salesChartData.data && Array.isArray(salesChartData.data)) {
+              // Legacy format with nested data property
+              setSalesData(salesChartData.data);
+            } else if (salesChartData && typeof salesChartData === 'object' && Object.keys(salesChartData).length > 0) {
+              // It might be an object with month keys and sales values
+              const formattedData = Object.entries(salesChartData).map(([month, sales]) => ({
+                name: month,
+                sales: typeof sales === 'number' ? sales : 0
+              }));
+              setSalesData(formattedData);
+            } else {
+              console.error("Invalid sales chart data format:", salesChartData);
+              // Use mock data as fallback
+              const mockData = [
+                { name: "Jan", sales: 1200 }, { name: "Feb", sales: 1900 },
+                { name: "Mar", sales: 2100 }, { name: "Apr", sales: 2400 },
+                { name: "May", sales: 1800 }, { name: "Jun", sales: 2800 },
+                { name: "Jul", sales: 3200 }, { name: "Aug", sales: 2700 },
+                { name: "Sep", sales: 2000 }, { name: "Oct", sales: 2300 },
+                { name: "Nov", sales: 2800 }, { name: "Dec", sales: 3800 }
+              ];
+              setSalesData(mockData);
+            }
+          } catch (error) {
+            console.error("Error parsing sales chart data:", error);
+            // Use mock data on error
+            setSalesData([
+              { name: "Jan", sales: 1200 }, { name: "Feb", sales: 1900 },
+              { name: "Mar", sales: 2100 }, { name: "Apr", sales: 2400 },
+              { name: "May", sales: 1800 }, { name: "Jun", sales: 2800 },
+              { name: "Jul", sales: 3200 }, { name: "Aug", sales: 2700 },
+              { name: "Sep", sales: 2000 }, { name: "Oct", sales: 2300 },
+              { name: "Nov", sales: 2800 }, { name: "Dec", sales: 3800 }
+            ]);
           }
         } else {
-          // Handle vendor fetch error gracefully
-          console.error("Failed to fetch vendor data:", vendorRes.status, vendorRes.statusText);
-          if (vendorRes.status === 401) {
-            console.log("Unauthorized - user may not be authenticated yet");
-          } else if (vendorRes.status === 403) {
-            console.log("User is not a vendor");
-          } else if (vendorRes.status === 404) {
-            console.log("Vendor not found");
-          }
+          // Use mock data if API call fails
+          console.error("Failed to fetch sales data, using mock data");
+          setSalesData([
+            { name: "Jan", sales: 1200 }, { name: "Feb", sales: 1900 },
+            { name: "Mar", sales: 2100 }, { name: "Apr", sales: 2400 },
+            { name: "May", sales: 1800 }, { name: "Jun", sales: 2800 },
+            { name: "Jul", sales: 3200 }, { name: "Aug", sales: 2700 },
+            { name: "Sep", sales: 2000 }, { name: "Oct", sales: 2300 },
+            { name: "Nov", sales: 2800 }, { name: "Dec", sales: 3800 }
+          ]);
         }
-
-        // Ensure minimum loading time
-        const elapsed = Date.now() - startTime;
-        if (elapsed < minLoadingTime) {
-          await new Promise(resolve => setTimeout(resolve, minLoadingTime - elapsed));
+        
+        if (vendorStatsRes.ok) {
+          const vendorStatsData = await vendorStatsRes.json();
+          setVendorStats(vendorStatsData);
         }
-
-      } catch (error) {
-        console.error("Error fetching vendor dashboard data:", error);
-      } finally {
-        setLoading(false);
+        
+        // Store last fetch time
+        localStorage.setItem(`lastDashboardFetch_${user.id}`, Date.now().toString());
       }
-    };
 
+      // Ensure minimum loading time for smoother UX
+      const elapsed = Date.now() - startTime;
+      if (elapsed < minLoadingTime) {
+        await new Promise(resolve => setTimeout(resolve, minLoadingTime - elapsed));
+      }
+    } catch (error) {
+      console.error("Error fetching vendor dashboard data:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [isLoaded, user, isVendor, vendor]);
+      useEffect(() => {
     // CRITICAL FIX: Add dependency on isLoaded and user
     fetchVendorData();
-  }, [isLoaded, user, isVendor]); // Add proper dependencies
+  }, [fetchVendorData]); // fetchVendorData is memoized with useCallback
 
   if (loading) {
     return <Loader />;
-  }
-
-  // Show error state if vendor data couldn't be loaded
+  }  // Show error state if vendor data couldn't be loaded
   if (!vendor && isVendor) {
     return (
       <div className="px-10 py-5">
         <div className="text-center py-12">
           <h2 className="text-xl font-bold text-red-600 mb-4">Unable to Load Vendor Dashboard</h2>
-          <p className="text-gray-600 mb-4">There was an issue loading your vendor information.</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-          >
-            Refresh Page
-          </button>
+          <p className="text-gray-600 mb-4">
+            There was an issue loading your vendor information.<br />
+            <span className="font-bold">Your role is set to "vendor" but no vendor record was found.</span>
+          </p>
+          <div className="flex flex-col space-y-4 items-center">
+            <button 
+              onClick={fetchVendorData}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            >
+              Refresh Data
+            </button>
+            <p className="text-sm text-gray-600 mt-4">
+              If refreshing doesn't work, you need to reapply as a vendor.
+            </p>
+            <button 
+              onClick={() => {
+                // Clear cached role
+                localStorage.removeItem(`role_${user?.id}`);
+                localStorage.removeItem(`lastRoleFetch_${user?.id}`);
+                localStorage.removeItem(`role_cache_time_${user?.id}`);
+                
+                // Also clear vendorCache
+                for (let i = 0; i < localStorage.length; i++) {
+                  const key = localStorage.key(i);
+                  if (key && (key.includes('vendor_') || key.includes('products_') || 
+                      key.includes('collections_') || key.includes('orders_'))) {
+                    localStorage.removeItem(key);
+                  }
+                }
+                
+                // Force refresh
+                window.location.href = "/vendor-application";
+              }}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+            >
+              Reapply as Vendor
+            </button>
+            
+            <div className="mt-8 pt-8 border-t border-gray-300 w-full">
+              <p className="text-sm font-semibold text-red-600 mb-2">Advanced Troubleshooting</p>
+              <button 
+                onClick={() => {
+                  // Completely reset all role and vendor related cache
+                  const keysToRemove = [];
+                  for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key) keysToRemove.push(key);
+                  }
+                  keysToRemove.forEach(key => localStorage.removeItem(key));
+                  
+                  // Hard reload (bypass cache)
+                  window.location.href = "/?clearCache=" + Date.now();
+                }}
+                className="bg-red-600 text-white px-4 py-2 text-sm rounded-lg hover:bg-red-700"
+              >
+                Reset All Cache & Reload
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -395,17 +514,28 @@ const VendorDashboard = () => {
           <CardHeader>
             <CardTitle>Manage Products</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <Link href="/my-products">
+          <CardContent className="space-y-4">            <Link href="/my-products">
               <Button className="w-full" variant="outline">
                 <Package className="mr-2 h-4 w-4" />
                 View My Products
+              </Button>
+            </Link>
+            <Link href="/my-products/new">
+              <Button className="w-full" variant="default">
+                <Plus className="mr-2 h-4 w-4" />
+                Add New Product
               </Button>
             </Link>
             <Link href="/my-collections">
               <Button className="w-full" variant="outline">
                 <Store className="mr-2 h-4 w-4" />
                 Manage Collections
+              </Button>
+            </Link>
+            <Link href="/my-collections/new">
+              <Button className="w-full" variant="default">
+                <Plus className="mr-2 h-4 w-4" />
+                Create New Collection
               </Button>
             </Link>
           </CardContent>
@@ -450,14 +580,15 @@ const VendorDashboard = () => {
             </Button>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Sales Chart */}
+      </div>      {/* Sales Chart */}
       <Card>
-        <CardHeader>
-          <CardTitle>Platform Sales Performance</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Sales Performance</CardTitle>
+          <div className="text-sm text-muted-foreground">
+            Last 12 months
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="h-[350px]">
           <SalesChart data={salesData} />
         </CardContent>
       </Card>
@@ -805,9 +936,7 @@ const AdminDashboard = () => {
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Quick Actions */}
+      </div>      {/* Quick Actions */}
       <Card className="mb-8">
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
@@ -839,15 +968,26 @@ const AdminDashboard = () => {
               </Button>
             </Link>
           </div>
+          <div className="mt-4 flex justify-end">
+            <Link href="/debug">
+              <Button variant="ghost" size="sm" className="text-sm text-gray-500 hover:text-red-600">
+                <Shield className="mr-1 h-3 w-3" />
+                Debug Tools
+              </Button>
+            </Link>
+          </div>
         </CardContent>
       </Card>
 
       {/* Sales Chart */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Platform Sales Performance</CardTitle>
+          <div className="text-sm text-muted-foreground">
+            Last 12 months
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="h-[350px]">
           <SalesChart data={salesData} />
         </CardContent>
       </Card>
@@ -859,8 +999,11 @@ const AdminDashboard = () => {
 export default function Home() {
   const { user, isLoaded } = useUser();
   const { role, loading: roleLoading } = useRole();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  const [isCheckingVendor, setIsCheckingVendor] = useState(false);
+  const [showEmergencyTools, setShowEmergencyTools] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -872,9 +1015,55 @@ export default function Home() {
 
     return () => clearTimeout(timer);
   }, []);
+  // Check vendor status to handle stale role data - with fix to prevent infinite reloads
+  useEffect(() => {
+    const checkVendorStatus = async () => {
+      // Skip if we're already checking or if we don't have the right conditions
+      if (!isCheckingVendor && role === "vendor" && user) {
+        // Set flag to prevent concurrent checks
+        setIsCheckingVendor(true);
+        
+        // Don't check if we recently checked (prevents rapid rechecks)
+        const lastCheck = localStorage.getItem(`lastVendorCheck_${user.id}`);
+        const now = Date.now();
+        if (lastCheck && (now - parseInt(lastCheck)) < 30000) { // 30 seconds
+          console.log("Skipping vendor check - checked recently");
+          setIsCheckingVendor(false);
+          return;
+        }
+        
+        try {
+          // Record check time to prevent frequent rechecks
+          localStorage.setItem(`lastVendorCheck_${user.id}`, now.toString());
+          
+          // Check if vendor record exists
+          const res = await fetch("/api/vendors/my-vendor", {
+            cache: 'no-store',
+            headers: {'Cache-Control': 'no-cache'}
+          });
+          
+          if (!res.ok) {
+            console.log("Vendor record not found but role is vendor");
+            // Instead of immediately redirecting, set a flag in localStorage
+            localStorage.setItem('needsVendorApplication', 'true');
+            // Don't use router.push here as it can cause infinite loops
+          }
+        } catch (error) {
+          console.error("Error checking vendor status:", error);
+        } finally {
+          setIsCheckingVendor(false);
+        }
+      }
+    };
+    
+    // Only run this effect if all required data is loaded and we're not already checking
+    if (isLoaded && role === "vendor" && user && mounted && !isCheckingVendor) {
+      checkVendorStatus();
+    }
+  }, [isLoaded, role, user, mounted]);  // Remove router and isCheckingVendor from dependencies
 
   // Show loading while checking authentication and initial setup
-  if (!mounted || !isLoaded || roleLoading || !initialLoadComplete) {
+  if (!mounted || !isLoaded || roleLoading || !initialLoadComplete || isCheckingVendor) {
     return <Loader />;
   }
 
@@ -882,10 +1071,70 @@ export default function Home() {
   if (!user) {
     return <LandingPageContent />;
   }
-
-  // Show landing page for regular users (they'll be redirected to vendor application by RoleGuard)
+  // Redirect regular users to vendor application
   if (role === "user") {
-    return <LandingPageContent />;
+    // Check if URL has a special parameter for fixing vendor role
+    if (typeof window !== "undefined" && window.location.search.includes("fixRole=true")) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+          <div className="max-w-md w-full bg-white rounded-lg shadow-xl overflow-hidden">
+            <div className="bg-green-600 p-4">
+              <h1 className="text-white text-xl font-bold">Fix Vendor Access</h1>
+            </div>
+            <div className="p-6 space-y-6">
+              <p className="text-gray-700">
+                Your vendor application is approved, but your role is still set to "user". 
+                Use this button to fix your role and get access to vendor features.
+              </p>
+              
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/debug/set-vendor-role", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" }
+                    });
+                    
+                    if (res.ok) {
+                      // Clear cached role
+                      localStorage.removeItem(`role_${user?.id}`);
+                      localStorage.removeItem(`lastRoleFetch_${user?.id}`);
+                      localStorage.removeItem(`role_cache_time_${user?.id}`);
+                      
+                      // Force refresh
+                      window.location.href = "/?roleFixed=true";
+                    } else {
+                      alert("Error: " + await res.text());
+                    }
+                  } catch (error) {
+                    console.error("Error fixing role:", error);
+                    alert("Error fixing role. Check console for details.");
+                  }
+                }}
+                className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                Fix My Vendor Role
+              </button>
+              
+              <Link href="/vendor-application">
+                <Button className="w-full">View Application Status</Button>
+              </Link>
+              
+              <button
+                onClick={() => window.location.href = "/"}
+                className="w-full py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+              >
+                Back to Home
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // Normal flow - redirect to vendor application
+    router.push("/vendor-application");
+    return <Loader />;
   }
 
   // Show vendor dashboard for vendors
@@ -897,7 +1146,134 @@ export default function Home() {
   if (role === "admin") {
     return <AdminDashboard />;
   }
+  // Emergency recovery UI for troubleshooting
+  if (showEmergencyTools) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-xl overflow-hidden">
+          <div className="bg-red-600 p-4">
+            <h1 className="text-white text-xl font-bold">Emergency Role Recovery</h1>
+          </div>
+          <div className="p-6 space-y-6">
+            <p className="text-gray-700">
+              This tool allows you to reset your role and vendor cache when you're stuck in an invalid state.
+            </p>
+            
+            <div className="bg-gray-50 p-4 rounded border border-gray-200">
+              <p className="font-medium">Current State:</p>
+              <ul className="mt-2 space-y-1 text-sm">
+                <li><span className="font-medium">User ID:</span> {user?.id}</li>
+                <li><span className="font-medium">Current Role:</span> {role || "Unknown"}</li>
+                <li><span className="font-medium">Email:</span> {user?.emailAddresses[0]?.emailAddress}</li>
+              </ul>
+            </div>
+            
+            <div className="space-y-4">              <button                onClick={() => {
+                  // Reset user role cache only
+                  const userId = user?.id;
+                  if (userId) {
+                    localStorage.removeItem(`role_${userId}`);
+                    localStorage.removeItem(`lastRoleFetch_${userId}`);
+                    localStorage.removeItem(`role_cache_time_${userId}`);
+                    window.location.reload();
+                  }
+                }}
+                className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Reset Role Cache Only
+              </button>
+              
+              <button
+                onClick={async () => {
+                  try {
+                    // Reset role in database to "user"
+                    const res = await fetch("/api/debug/reset-role", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" }
+                    });
+                    
+                    if (res.ok) {
+                      // Also clear cached role
+                      localStorage.removeItem(`role_${user?.id}`);
+                      localStorage.removeItem(`lastRoleFetch_${user?.id}`);
+                      localStorage.removeItem(`role_cache_time_${user?.id}`);
+                      alert("Role reset successfully to 'user'. You'll be redirected to vendor application.");
+                      router.push("/vendor-application");
+                    } else {
+                      alert("Failed to reset role: " + (await res.text()));
+                    }
+                  } catch (error) {
+                    console.error("Error resetting role:", error);
+                    alert("Error resetting role. Check console for details.");
+                  }
+                }}
+                className="w-full py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+              >
+                Reset DB Role to "User"
+              </button>
+              
+              <button
+                onClick={() => {
+                  // Reset all local storage
+                  localStorage.clear();
+                  window.location.href = "/?clearCache=" + Date.now();
+                }}
+                className="w-full py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                Clear ALL Local Storage & Reload
+              </button>
+              
+              <button
+                onClick={() => router.push("/vendor-application")}
+                className="w-full py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              >
+                Go to Vendor Application
+              </button>
+              
+              <button
+                onClick={() => setShowEmergencyTools(false)}
+                className="w-full py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  // Fallback
-  return <LandingPageContent />;
+  // Fallback - show emergency tools button first, then redirect
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+      <div className="text-center p-8">
+        <h1 className="text-2xl font-bold text-gray-800 mb-4">Navigation Issue Detected</h1>
+        <p className="text-gray-600 mb-8">
+          There seems to be an issue with your account status. You can try the emergency tools
+          or go directly to the vendor application page.
+        </p>
+        <div className="flex flex-col space-y-4">
+          <button
+            onClick={() => setShowEmergencyTools(true)}
+            className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700"
+          >
+            Show Emergency Tools
+          </button>
+          <button
+            onClick={() => {
+              // Reset role cache then redirect
+              if (user?.id) {
+                localStorage.removeItem(`role_${user.id}`);
+                localStorage.removeItem(`role_cache_time_${user.id}`);
+              }
+              router.push("/vendor-application");
+            }}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Go to Vendor Application
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

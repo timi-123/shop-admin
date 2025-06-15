@@ -115,7 +115,10 @@ const DebugCollectionForm = () => {
         </div>
       )}
       
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        handleSubmit(e);
+      }} className="space-y-6">
         <div>
           <label className="block mb-2 font-semibold">Title</label>
           <Input

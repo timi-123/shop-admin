@@ -26,25 +26,44 @@ export const useRole = () => {
                 setLoading(false);
                 setRole(null);
                 return;
-            }
-
-            // Check if we already have a role for this user
+            }            // Check if we already have a role for this user
             const cachedRole = localStorage.getItem(`role_${user.id}`);
-            if (cachedRole && cachedRole !== 'null') {
-                console.log("Using cached role:", cachedRole);
-                setRole(cachedRole);
-                setLoading(false);
-                return;
+            const roleCacheTime = localStorage.getItem(`role_cache_time_${user.id}`);
+            
+            // Only use cache if it exists, isn't null, and isn't older than 5 minutes
+            if (cachedRole && cachedRole !== 'null' && roleCacheTime) {
+                const cacheAge = Date.now() - parseInt(roleCacheTime);
+                if (cacheAge < 5 * 60 * 1000) { // 5 minutes
+                    console.log("Using cached role:", cachedRole);
+                    setRole(cachedRole);
+                    setLoading(false);
+                    return;
+                } else {
+                    console.log("Cached role is stale, refreshing");
+                    // Clear stale cache
+                    localStorage.removeItem(`role_${user.id}`);
+                    localStorage.removeItem(`role_cache_time_${user.id}`);
+                }
             }
 
             fetchingRef.current = true;
-            setLoading(true);
-
-            try {
+            setLoading(true);            try {
                 // Store user ID in localStorage for reference
                 localStorage.setItem('userId', user.id);
                 
                 console.log("Fetching role for user:", user.id);
+                
+                // Use a timestamp to avoid fetching role too frequently
+                const now = Date.now();
+                const lastRoleFetchTime = localStorage.getItem(`lastRoleFetch_${user.id}`);
+                const shouldFetchRole = !lastRoleFetchTime || (now - parseInt(lastRoleFetchTime, 10)) > 60000; // 1 minute
+                
+                if (!shouldFetchRole) {
+                    console.log("Skipping role fetch - recently fetched");
+                    fetchingRef.current = false;
+                    setLoading(false);
+                    return;
+                }
                 
                 const response = await fetch("/api/role", {
                     cache: 'no-store',
